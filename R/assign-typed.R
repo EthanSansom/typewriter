@@ -41,7 +41,7 @@ internal_assign_typed <- function(sym, call, env) {
       return(VALUE)
     }
     # TODO: Should be `typewriter::with_chained_assignment_error()`
-    VALUE <<- with_chained_assignment_error(
+    with_chained_assignment_error(
       expr = !!prepared$TYPE_CALL,
       sym_name = !!sym_name,
       # TODO: I don't know if there's a reliable way to get the correct value
@@ -52,6 +52,10 @@ internal_assign_typed <- function(sym, call, env) {
       # value_name = rlang::as_label(match.call()[[2]][2]),
       error_call = ENV
     )
+    # NOTE: Recording the input argument and NOT the result of `TYPE_CALL()`,
+    # this means that we can allow assertions which return NULL or checks which
+    # return their input.
+    VALUE <<- !!sym
     return(VALUE)
   })
 
@@ -142,7 +146,7 @@ prepare_type_call <- function(sym, call, env, error_call = rlang::caller_env()) 
         )
       ),
       call = error_call,
-      class = "typewriter_error_invalid_arg"
+      class = "typewriter_error_input_type"
     )
   } else {
     # If an initialization value is available, we attempt both to evaluate that
@@ -157,7 +161,7 @@ prepare_type_call <- function(sym, call, env, error_call = rlang::caller_env()) 
             i = sprintf("Attempted assignment `%s <- %s`.", rlang::as_name(sym), rlang::as_label(call_args[[1]]))
           ),
           call = error_call,
-          class = "typewriter_error_invalid_arg",
+          class = "typewriter_error_input_type",
           parent = cnd
         )
       }
@@ -171,7 +175,7 @@ prepare_type_call <- function(sym, call, env, error_call = rlang::caller_env()) 
             i = sprintf("Attempted to evaluate `call = %s`.", rlang::as_label(call))
           ),
           call = error_call,
-          class = "typewriter_error_invalid_arg",
+          class = "typewriter_error_input_type",
           parent = cnd
         )
       }
@@ -196,7 +200,7 @@ prepare_type_call <- function(sym, call, env, error_call = rlang::caller_env()) 
               x = sprintf("Every argument to `call` must be evaluable in `env = <env: %s>`.", rlang::env_label(env))
             ),
             call = error_call,
-            class = "typewriter_error_invalid_arg",
+            class = "typewriter_error_input_type",
             parent = cnd
           )
         }
