@@ -2,9 +2,11 @@ test_that("`%<~%` works", {
   check_integer <- function(x, len = NULL) {
     stopifnot(is.integer(x), is.null(len) || length(x) == len)
   }
+  check_integer_alias <- alias(check_integer())
 
+  # Should be able to assign a call (with/without initialization value) or alias
   int1 %<~% check_integer()
-  int2 %<~% check_integer
+  int2 %<~% check_integer_alias
   int3 %<~% check_integer(1:5)
   scalar_int1 %<~% check_integer(len = 1L)
   scalar_int2 %<~% check_integer(1L, len = 1L)
@@ -56,25 +58,29 @@ test_that("`%<~%` errors on invalid inputs.", {
   }
   checks <- list(check_integer, check = check_integer)
 
-  expect_error(x %<~% 10, class = "typewriter_error_input_type")
-  expect_error("A" %<~% check_integer(), class = "typewriter_error_input_type")
-  expect_error(x %<~% checks[[1]], class = "typewriter_error_input_type")
-  expect_error(x %<~% checks$check, class = "typewriter_error_input_type")
-  expect_error(x %<~% checks$check(), class = "typewriter_error_input_type")
-
-  # `call` (RHS) may only have one unnamed argument (the first)
-  expect_error(x %<~% check_integer(1L, 2L), class = "typewriter_error_input_type")
-  expect_error(x %<~% check_integer(x = 1L, 2L), class = "typewriter_error_input_type")
+  expect_error("A" %<~% check_integer(), class = "typewriter_error_invalid_input")
+  expect_error(x %<~% 10, class = "typewriter_error_invalid_input")
+  expect_error(x %<~% checks[[1]], class = "typewriter_error_invalid_input")
+  expect_error(x %<~% checks$check, class = "typewriter_error_invalid_input")
+  expect_error(x %<~% checks$check(), class = "typewriter_error_invalid_input")
 
   # `call` (RHS) must not raise an error if an initialization value is provided
-  expect_error(x %<~% check_integer("A"), class = "typewriter_error_input_type")
-  expect_error(x %<~% check_integer(1L, len = 2L), class = "typewriter_error_input_type")
+  expect_error(x %<~% check_integer("A"), class = "typewriter_error_invalid_input")
+  expect_error(x %<~% check_integer(1L, len = 2L), class = "typewriter_error_invalid_input")
 
   # `call` (RHS) arguments must all be evaluable
-  expect_error(x %<~% check_integer(stop()), class = "typewriter_error_input_type")
-  expect_error(x %<~% check_integer(stop(), len = 1L), class = "typewriter_error_input_type")
-  expect_error(x %<~% check_integer(len = stop()), class = "typewriter_error_input_type")
-  expect_error(x %<~% check_integer(1L, len = stop()), class = "typewriter_error_input_type")
+  expect_error(x %<~% check_integer(stop()), class = "typewriter_error_invalid_input")
+  expect_error(x %<~% check_integer(stop(), len = 1L), class = "typewriter_error_invalid_input")
+  expect_error(x %<~% check_integer(len = stop()), class = "typewriter_error_invalid_input")
+  expect_error(x %<~% check_integer(1L, len = stop()), class = "typewriter_error_invalid_input")
+})
+
+test_that("`%<~%` errors when `call` doesn't exist in `env`", {
+  env <- new.env()
+  expect_error(x %<~% non_extant_alias, class = "typewriter_error_invalid_input")
+  expect_error(x %<~% non_extant_fun(), class = "typewriter_error_invalid_input")
+  expect_error(x %<~% non_extant_ns::non_extant_alias, class = "typewriter_error_invalid_input")
+  expect_error(x %<~% non_extant_ns::non_extant_fun(), class = "typewriter_error_invalid_input")
 })
 
 test_that("`%<~%` overwrites existing symbols in the caller's enironment.", {
@@ -94,7 +100,7 @@ test_that("`%<~%` overwrites existing symbols in the caller's enironment.", {
   expect_identical(x, 1L)
 })
 
-test_that("Typed error conditions reference their parent call.", {
+test_that("Typed objects within a function reference the correct function call in errors.", {
   check_integer <- function(x, len = NULL) {
     stopifnot(is.integer(x), is.null(len) || length(x) == len)
   }
@@ -111,9 +117,10 @@ test_that("`assign_typed()` works", {
   check_integer <- function(x, len = NULL) {
     stopifnot(is.integer(x), is.null(len) || length(x) == len)
   }
+  check_integer_alias <- alias(check_integer())
 
   assign_typed(int1, check_integer())
-  assign_typed(int2, check_integer)
+  assign_typed(int2, check_integer_alias)
   assign_typed(int3, check_integer(1:5))
   assign_typed(scalar_int1, check_integer(len = 1L))
   assign_typed(scalar_int2, check_integer(1L, len = 1L))
@@ -176,4 +183,12 @@ test_that("`assign_typed()` `env` argument works correctly.", {
   assign_typed(x, check_integer(11L), env = env)
   expect_identical(env$int, 10L)
   expect_identical(env$x, 11L)
+})
+
+test_that("`assign_typed()` errors when `call` doesn't exist in `env`", {
+  env <- new.env()
+  expect_error(assign_typed(z, non_extant_alias, env = env), class = "typewriter_error_invalid_input")
+  expect_error(assign_typed(z, non_extant_fun(), env = env), class = "typewriter_error_invalid_input")
+  expect_error(assign_typed(z, non_extant_ns::non_extant_alias, env = env), class = "typewriter_error_invalid_input")
+  expect_error(assign_typed(z, non_extant_ns::non_extant_fun(), env = env), class = "typewriter_error_invalid_input")
 })
