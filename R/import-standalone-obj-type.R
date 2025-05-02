@@ -174,7 +174,7 @@ obj_type_friendly <- function(x, value = TRUE) {
 
 vec_type_friendly <- function(x, length = FALSE) {
   if (!rlang::is_vector(x)) {
-    abort("`x` must be a vector.")
+    rlang::abort("`x` must be a vector.")
   }
   type <- typeof(x)
   n_dim <- length(dim(x))
@@ -261,7 +261,7 @@ vec_type_friendly <- function(x, length = FALSE) {
 }
 
 .rlang_stop_unexpected_typeof <- function(x, call = rlang::caller_env()) {
-  abort(
+  rlang::abort(
     sprintf("Unexpected type <%s>.", typeof(x)),
     call = call
   )
@@ -339,7 +339,7 @@ stop_input_type <- function(
     obj_type_friendly(x, value = show_value)
   )
 
-  abort(message, ..., call = call, arg = arg)
+  rlang::abort(message, ..., call = call, arg = arg)
 }
 
 oxford_comma <- function(chr, sep = ", ", final = "or") {
