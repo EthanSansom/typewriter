@@ -1,22 +1,8 @@
 # todos ------------------------------------------------------------------------
 
-## Get standalone-obj-type from {rlang} for `obj_type_friendly()`
-# - alter the error messages in this script
-
-## Update `check_quo_is_callish()` to handle cases where the call/function
-#  doesn't exist in the quosure's environment.
 
 # check ------------------------------------------------------------------------
 
-#' Check that an object is a symbol
-#'
-#' @param x An object to check.
-#' @param x_name Name used in error message.
-#' @param call Call used in error condition.
-#'
-#' @returns A symbol.
-#' @keywords internal
-#' @noRd
 check_is_symbol <- function(
     x,
     x_name = rlang::caller_arg(x),
@@ -27,56 +13,7 @@ check_is_symbol <- function(
     return(x)
   }
   typewriter_abort_invalid_input(
-    # TODO: Add "not {obj_type_friendly(x)}"
-    sprintf("`%s` must be a symbol.", x_name),
-    call = call
-  )
-}
-
-#' Check that a quosure is a call or a function provided by name
-#'
-#' @param quosure A quosure.
-#' @param quosure_name Name used in error message.
-#' @param call Call used in error condition.
-#'
-#' @returns
-#'
-#' A call expression (not a quosure!) If `quosure` is a quoted function, then
-#' it is converted to a call with `rlang::call2()` prior to returning.
-#'
-#' @keywords internal
-#' @noRd
-check_quo_is_callish <- function(
-    quosure,
-    quosure_name = rlang::caller_arg(quosure),
-    call = rlang::caller_env()
-  ) {
-
-  if (!rlang::is_quosure(quosure)) {
-    typewriter_abort("`quosure` must be a quosure.", internal = TRUE)
-  }
-
-  # TODO: Need to check two things:
-  # 1. For a named function like `ns::foo` or `foo`, does `foo` exist in the quosure env?
-  # 2. For a call like `ns::bar()` and `bar()`, does `bar` exist in the quosure env?
-
-  expr <- rlang::quo_get_expr(quosure)
-  if (quo_is_named_function(quosure)) {
-    return(rlang::call2(expr))
-  }
-  if (rlang::is_call_simple(expr)) {
-    return(expr)
-  }
-  if (rlang::is_call(expr)) {
-    typewriter_abort_invalid_input(
-      # TODO: Add more examples of what a simple call is...
-      sprintf("`%s` must be a simple call.", quosure_name),
-      call = call
-    )
-  }
-  typewriter_abort_invalid_input(
-    # TODO: Add second line, x = `quosure_name = rlang::as_label(expr)` is a BLANK.
-    sprintf("`%s` must be a simple call or function provided by name.", quosure_name),
+    sprintf("`%s` must be a symbol, not %s.", x_name, obj_type_friendly(x)),
     call = call
   )
 }
@@ -144,6 +81,30 @@ check_is_function <- function(
   }
   typewriter_abort_invalid_input(
     message = message %||% sprintf("`%s` must be a function, not %s.", x_name, obj_type_friendly(x)),
+    call = call
+  )
+}
+
+assert_dots_named <- function(..., message = NULL, call = rlang::caller_env()) {
+
+  named_dots_at <- rlang::have_name(rlang::enexprs(...))
+  if (all(named_dots_at)) {
+    return(invisible())
+  }
+  unnamed_dots <- paste0("..", which(!named_dots_at))
+  n_unnamed_dots <- length(unnamed_dots)
+
+  if (n_unnamed_dots > 5) {
+    unnamed_dots <- paste0("c(", commas(unnamed_dots[1:4]), ", ..., ", unnamed_dots[n_unnamed_dots], ")")
+  } else if (n_unnamed_dots > 1) {
+    unnamed_dots <- paste0("c(", commas(unnamed_dots), ")")
+  }
+
+  typewriter_abort_invalid_input(
+    message = c(
+      "Arguments supplied to `...` must be named.",
+      x = sprintf("Argument%s `%s` are unnanmed.", ngettext(n_unnamed_dots, "", "s"), unnamed_dots)
+    ),
     call = call
   )
 }
@@ -216,4 +177,8 @@ at_positions <- function(loc, n_max = 5) {
   } else {
     paste0(at, "`", deparse(loc), "`")
   }
+}
+
+commas <- function(x) {
+  paste(x, collapse = ", ")
 }
