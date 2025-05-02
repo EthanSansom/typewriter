@@ -3,33 +3,66 @@
 # TODO: Check if you're using any newer {rlang} functions (maybe `rlang::try_fetch()`)
 #       and up the version number if so (or use `withCallingHandlers`).
 
-# TODO: Move the implementation or `internal_assign_typed()` into `assign_typed()`,
-#       no reason currently to sperate them
+# TODO: `check_is_environment()` for all uses of `env`
 
 # assignment -------------------------------------------------------------------
 
 # TODO: Once `typed_function()` exists, update this to dispatch differently when
 #       the RHS is a call to `function`.
 `%<~%` <- function(sym, call) {
-  internal_assign_typed(
-    sym = rlang::enexpr(sym),
-    call = rlang::enexpr(call),
-    env = rlang::caller_env()
-  )
+  call <- rlang::enexpr(call)
+  sym <- rlang::enexpr(sym)
+  env <- rlang::caller_env()
+
+  if (rlang::is_call(call, "function", ns = "")) {
+    .assign_typed_function(
+      sym = sym,
+      call = call,
+      env = env
+    )
+  } else {
+    .assign_typed(
+      sym = sym,
+      call = call,
+      env = env
+    )
+  }
 }
 
 assign_typed <- function(sym, call, env = rlang::caller_env()) {
-  internal_assign_typed(
+  .assign_typed(
     sym = rlang::enexpr(sym),
     call = rlang::enexpr(call),
     env = env
   )
 }
 
-internal_assign_typed <- function(sym, call, env) {
+.assign_typed_function <- function(sym, call, env) {
 
   error_call <- rlang::caller_env()
-  sym <- check_is_symbol(sym, call = error_call)
+  check_is_symbol(sym, call = error_call)
+  sym_name <- rlang::as_name(sym)
+
+  typed_fun <- rlang::try_fetch(
+    typed(!!call, env = env),
+    typewriter_error = function(cnd) {
+      typewriter_abort(
+        message = sprintf("Can't assign typed function to object `%s`.", sym_name),
+        call = error_call,
+        parent = cnd
+      )
+    }
+  )
+
+  rlang::env_bind(env, !!sym_name := typed_fun)
+}
+
+utils::globalVariables(":=")
+
+.assign_typed <- function(sym, call, env) {
+
+  error_call <- rlang::caller_env()
+  check_is_symbol(sym, call = error_call)
 
   # An <alias> may be provided by name, e.g. `call = ns::a_int` or `call = a_int`
   # In this case we convert it into a call, e.g. `a_int()`. Otherwise, `call`
@@ -196,12 +229,12 @@ internal_assign_typed <- function(sym, call, env) {
   makeActiveBinding(sym = sym, fun = active_binding_function, env = env)
 }
 
+utils::globalVariables("!<-")
+
 # helpers ----------------------------------------------------------------------
 
 symbol_to_pairlist <- function(sym) {
-  args <- rlang::pairlist2(x = )
-  names(args) <- rlang::as_name(sym)
-  args
+  rlang::pairlist2(!!sym := rlang::missing_arg())
 }
 
 env_desc <- function(env) {
@@ -210,114 +243,4 @@ env_desc <- function(env) {
 
 is_named_symbol <- function(x) {
   is.symbol(x) || rlang::is_call(x, c("::", ":::"))
-}
-
-type_fun_body <- function(sym, call) {
-  sym_name <- rlang::as_name(sym)
-  rlang::expr({
-    if (missing(!!sym)) {
-      return(VALUE)
-    }
-    rlang::try_fetch(
-      expr = !!call,
-      error = function(cnd) {
-        rlang::abort(
-          message = sprintf("Attempted to assign an invalid value to typed object `%s`.", !!sym_name),
-          class = c("typewriter_error", "typewriter_error_invalid_assignment"),
-          call = ENV,
-          parent = cnd
-        )
-      }
-    )
-    VALUE <<- !!sym
-    VALUE
-  })
-}
-
-# TODO: We will want to split off the `VALUE` extraction part of this, since
-#       `typed_function()` will need to do a similar process for each typed
-#       argument in the function.
-prepare_type_fun_pieces <- function(sym, call, env, error_call) {
-  call_args <- rlang::call_args(call)
-  named_at <- rlang::have_name(call_args)
-
-  # `call` may contain the value to used initialize `sym` (e.g. `chk_int(10L)`).
-  # We only allow the initialization value to be in the first un-named argument
-  # of the `call` and all other arguments must be named.
-  if (all(named_at)) {
-    VALUE <- new_uninitialized()
-  } else if (named_at[[1]] || sum(!named_at) > 1) {
-    unamed_at <- which(!named_at)
-    n_unnamed <- length(unamed_at)
-    typewriter_abort_invalid_input(
-      message = c(
-        "All arguments to `call` must be named (except potentially the first).",
-        x = paste0(
-          "`call = ", rlang::as_label(call), "` has ", n_unnamed,
-          " unnamed argument", "s"[n_unnamed > 1], " ", at_positions(unamed_at), "."
-        )
-      ),
-      call = error_call
-    )
-  } else {
-    # If an initialization value is available, we attempt to (1) evaluate that
-    # value and (2) to evaluate `call` (raising chained error otherwise). Doing
-    # (1) and (2) separately provides better context for the error message.
-    VALUE <- check_is_evaluable(
-      x = call_args[[1]],
-      env = env,
-      message = c(
-        sprintf("Can't initialize object `%s` using the first argument of `call`.", rlang::as_name(sym)),
-        i = sprintf("Attempted assignment `%s <- %s`.", rlang::as_name(sym), rlang::as_label(call_args[[1]]))
-      ),
-      call = error_call
-    )
-    check_is_evaluable(
-      x = call,
-      env = env,
-      message = c(
-        sprintf("Can't initialize typed object `%s` using `call`.", rlang::as_name(sym)),
-        i = sprintf("Attempted to evaluate `call = %s`.", rlang::as_label(call))
-      ),
-      call = error_call
-    )
-    call <- call[-2] # Remove the first argument after extracting the value
-  }
-
-  # Pre-evaluate every named argument to `call` and modify `call` to (1) reference
-  # these evaluated arguments and (2) take `sym` as it's first argument.  E.g.
-  # `foo(x = 1, y = 1 + 1)` becomes `foo(sym, x = ARGS$x, y = ARGS$y)` where
-  # `ARGS = list(x = 1, y = 2)` is the list of pre-evaluated arguments.
-  ARGS <- map2(
-    .x = call_args[named_at],
-    .y = names(call_args[named_at]),
-    .f = \(arg, arg_name) {
-      check_is_evaluable(
-        x = arg,
-        env = env,
-        message = c(
-          sprintf("Can't evaluate argument `%s = %s` of `call`.", arg_name, rlang::as_label(arg)),
-          x = sprintf("Every argument to `call` must be evaluable in `env = <environment: %s>`.", rlang::env_label(env))
-        ),
-        call = error_call
-      )
-    }
-  )
-
-  # Creates a named list like `arg_name = ARGS$arg_name`
-  inlined_ARGS <- function(arg_names) {
-    map(arg_names, \(arg_name) rlang::call2("$", quote(ARGS), rlang::sym(arg_name)))
-  }
-
-  call <- rlang::call_modify(
-    .call = call[1], # Gets `call` with no arguments, we re-supply them all here
-    sym,
-    !!!inlined_ARGS(names(ARGS))
-  )
-
-  list(
-    CALL = call,
-    VALUE = VALUE,
-    ARGS = ARGS
-  )
 }
