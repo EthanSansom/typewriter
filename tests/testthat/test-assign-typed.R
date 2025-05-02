@@ -1,4 +1,4 @@
-test_that("`%<~%` works", {
+test_that("`%<~%` works for typed object assignment.", {
   check_integer <- function(x, len = NULL) {
     stopifnot(is.integer(x), is.null(len) || length(x) == len)
   }
@@ -50,6 +50,71 @@ test_that("`%<~%` works", {
   base::assign("int1", 2L)
   expect_identical(int1, 2L)
   expect_error(base::assign("int1", "A"), class = "typewriter_error_invalid_assignment")
+})
+
+test_that("`%<~%` works for typed function assignment.", {
+  check_integer <- function(x, len = NULL) {
+    if (!(is.integer(x) && (is.null(len) || length(x) == len))) {
+      rlang::abort(
+        message = sprintf("Invalid object %s", rlang::caller_arg(x)),
+        class = "invalid_input"
+      )
+    }
+  }
+  check_integer_alias <- alias(check_integer())
+
+  fun %<~% function(
+    x = check_integer(),
+    y = check_integer_alias,
+    z = check_integer(len = 1L),
+    q = check_integer(0L),
+    r = check_integer(1:2, len = 2L)
+  ) {
+    TRUE
+  }
+
+  fun_dots %<~% function(... = check_integer(), x = check_integer(1L)) {
+    TRUE
+  }
+
+  expect_true(is_typed_function(fun))
+  expect_true(is_typed_function(fun_dots))
+
+  expect_identical(
+    attr(fun, "type_calls"),
+    rlang::exprs(
+      check_integer(x),
+      check_integer_alias(y),
+      check_integer(z, len = 1L),
+      check_integer(q),
+      check_integer(r, len = 2L),
+      .named = NULL
+    )
+  )
+  expect_identical(
+    formals(fun),
+    rlang::pairlist2(x = , y = , z = , q = 0L, r = quote(1:2))
+  )
+  expect_identical(
+    formals(fun_dots),
+    rlang::pairlist2(... = , x = 1L)
+  )
+
+  expect_true(fun(x = 1:5, y = 1:5, z = 1L))
+  expect_true(fun_dots(1:5, 1:5, 1L, x = 0L))
+
+  expect_error(
+    fun(x = "A", y = 1L, z = 1L),
+    class = "invalid_input",
+    regexp = "Invalid object x",
+    fixed = TRUE
+  )
+  expect_error(
+    fun_dots(1L, "A"),
+    class = "invalid_input",
+    regexp = "Invalid object ..2",
+    fixed = TRUE
+  )
 })
 
 test_that("`%<~%` errors on invalid inputs.", {
