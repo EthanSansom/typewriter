@@ -3,6 +3,9 @@ typewriter
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 <!-- badges: start -->
+
+[![Codecov test
+coverage](https://codecov.io/gh/EthanSansom/typewriter/graph/badge.svg)](https://app.codecov.io/gh/EthanSansom/typewriter)
 <!-- badges: end -->
 
 {typewriter} implements a minimal system for adding type safety to

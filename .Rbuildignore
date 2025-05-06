@@ -3,3 +3,5 @@
 ^README\.Rmd$
 ^R/-interactive-testing$
 ^LICENSE\.md$
+^codecov\.yml$
+^\.github$
