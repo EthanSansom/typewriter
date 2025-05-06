@@ -9,6 +9,8 @@
 
 # TODO: Once `typed_function()` exists, update this to dispatch differently when
 #       the RHS is a call to `function`.
+
+#' @export
 `%<~%` <- function(sym, call) {
   call <- rlang::enexpr(call)
   sym <- rlang::enexpr(sym)
@@ -29,6 +31,7 @@
   }
 }
 
+#' @export
 assign_typed <- function(sym, call, env = rlang::caller_env()) {
   .assign_typed(
     sym = rlang::enexpr(sym),
@@ -74,13 +77,16 @@ utils::globalVariables(":=")
       message = c(
         "`call` must be an <alias> provided by name or a simple call.",
         i = sprintf("`call` is the object `%s`.", rlang::as_label(call)),
-        x = sprintf("Can't evaluate `call` in `env = %s`", env_desc(env))
+        x = sprintf("Can't evaluate `call` in `env = %s`.", env_desc(env))
       ),
       call = error_call
     )
     if (!is_alias(maybe_alias)) {
       typewriter_abort_invalid_input(
-        sprintf("`call` must be an <alias> or a simple call, not %s.", obj_type_friendly(maybe_alias)),
+        sprintf(
+          "`call` must be an <alias> or a simple call, not %s.",
+          obj_type_friendly(maybe_alias)
+        ),
         call = error_call
       )
     }
@@ -112,7 +118,10 @@ utils::globalVariables(":=")
       message = c(
         "`call` must be an <alias> or a simple call.",
         x = sprintf("`call` is a malformed call to `%s`.", rlang::as_label(call[[1]])),
-        x = sprintf("`%s` is %s in `env = %s`, not a function.", env_desc(env), obj_type_friendly(maybe_function))
+        x = sprintf(
+          "`%s` is %s in `env = %s`, not a function.",
+          rlang::as_label(call[[1]]), obj_type_friendly(maybe_function), env_desc(env)
+        )
       ),
       call = error_call
     )
@@ -164,11 +173,12 @@ utils::globalVariables(":=")
     rlang::try_fetch(
       expr = eval(call, env),
       error = function(cnd) {
-        typewriter_abort_invalid_input(
+        typewriter_abort(
           message = c(
             sprintf("Can't declare typed object `%s`.", rlang::as_name(sym)),
             i = sprintf("Attempted assignment `%s <- %s`.", rlang::as_name(sym), rlang::as_label(call_args[[1]]))
           ),
+          class = "typewriter_error_invalid_assignment",
           call = error_call,
           parent = cnd
         )
@@ -205,6 +215,7 @@ utils::globalVariables(":=")
     rlang::try_fetch(
       expr = !!new_call,
       error = function(cnd) {
+        # TODO: Maybe `typewriter_abort()`? Does this matter
         rlang::abort(
           message = sprintf("Attempted to assign an invalid value to typed object `%s`.", !!sym_name),
           class = c("typewriter_error", "typewriter_error_invalid_assignment"),
