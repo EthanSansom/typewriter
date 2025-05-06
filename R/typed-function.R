@@ -1,17 +1,21 @@
 # todos ------------------------------------------------------------------------
 
-# TODO: Polish `as_typed_function()`, with will be a very useful function to
+# TODO: Polish `as_typed_function()`, which will be a very useful function to
 #       have for post-hoc function typing so we do need it.
 
 # function typing --------------------------------------------------------------
 
 #' @export
 typed <- function(call, env = rlang::caller_env()) {
+  check_is_environment(env)
   call <- rlang::enexpr(call)
   if (!rlang::is_call(call, "function", ns = "")) {
     if (rlang::is_call(call)) {
       typewriter_abort_invalid_input(
-        sprintf("`call` must be a defused call to `function`, not a call to `%s`.", rlang::as_label(call[[1]]))
+        message = sprintf(
+          "`call` must be a defused call to `function`, not a call to `%s`.",
+          rlang::as_label(call[[1]])
+        )
       )
     }
     typewriter_abort_invalid_input(
@@ -21,7 +25,8 @@ typed <- function(call, env = rlang::caller_env()) {
   new_typed_function(
     args = call[[2]],
     body = call[[3]],
-    env = env
+    env = env,
+    error_arg = "call"
   )
 }
 
@@ -34,9 +39,13 @@ as_typed_function <- function(.fun, ...) {
     .fun <- untype_function(.fun)
   }
 
-  # TODO: We'll need to handle `...` specially maybe?
   body <- rlang::fn_body(.fun)
-  args <- map(rlang::fn_fmls(.fun), \(fml) rlang::call2(quote(untyped), fml))
+  args <- map(rlang::fn_fmls(.fun), \(fml) rlang::call2(quote(typewriter::untyped), fml))
+
+  # `...` can't be `untyped()`
+  if ("..." %in% names(args)) {
+    args$`...` <- rlang::missing_arg()
+  }
 
   typed_args <- rlang::enexprs(...)
   typed_args_names <- rlang::names2(typed_args)
@@ -56,34 +65,38 @@ as_typed_function <- function(.fun, ...) {
   new_typed_function(
     args = args,
     body = body,
-    env = rlang::fn_env(.fun)
+    env = rlang::fn_env(.fun),
+    error_arg = ".fun"
   )
 }
 
-new_typed_function <- function(args, body, env, error_call = rlang::caller_env()) {
-  args_names <- names(args)
+# Warning to the reader, this function is 90% input validation, since we're
+# tossing around unevaluated calls with unknown provenance. Error messages
+# reference the `error_arg`, which is either `call` in `typed(call, env)` or
+# `.fun` in `as_typed_function(.fun, ...)`.
+new_typed_function <- function(
+    args,
+    body,
+    env,
+    error_arg,
+    error_call = rlang::caller_env()
+  ) {
+
+  args_names <- rlang::names2(args)
   type_calls <- list()
   new_args <- args
 
   typed_args_names <- character()
   typed_args_descs <- character()
 
-  # TODO: I think we should pick up and record the description of each typed
-  #       argument as we go (e.g. using the <alias> "desc" for aliases and the
-  #       type_check call for non-aliases). We can also take arguments with
-  #       optional, maybe, and required.
-  #
-  # `x`   "An integer vector" [optional, maybe]
-  # `vvv` "An object checked by `check_integer(vvv, len = 1L)` [required]
-
-  is_reserved_arg <- map_lgl(args, function(arg) ".__dot__." %in% all.vars(arg))
+  is_reserved_arg <- map_lgl(args, function(arg) "..i" %in% all.vars(arg))
   if (any(is_reserved_arg)) {
-    bad_arg_pos <- which.min(is_reserved_arg)
+    bad_arg <- args_names[[which.max(is_reserved_arg)]]
     typewriter_abort_invalid_input(
       message = c(
-        "Arguments in `call` may not contain the symbol `.__dot__`.",
-        x = sprintf("`call` argument at position `%i` contains the symbol `.__dot__.`", bad_arg_pos),
-        i = "The symbol `.__dot__.` is reversed for internal use in <typed> functions."
+        sprintf("Arguments in `%s` must not contain the symbol `..i`.", error_arg),
+        x = sprintf("`%s` argument `%s` contains the symbol `..i`", error_arg, bad_arg),
+        i = "The symbol `..i` is reserved for internal use in <typed> functions."
       ),
       call = error_call
     )
@@ -96,8 +109,11 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
   stop_incompatible_dots_modifier <- function(modifier_name) {
     typewriter_abort_invalid_input(
       message = c(
-        "Can't convert `call` into a typed function.",
-        x = sprintf("Argument `...` of `call` contains a call to `%s()`.", modifier_name),
+        sprintf("Can't convert `%s` into a <typed> function.", error_arg),
+        x = sprintf(
+          "Argument `...` of `%s` contains a call to `typewriter::%s()`.",
+          error_arg, modifier_name
+        ),
         x = sprintf("Typed function dots can't be %s.", modifier_name)
       ),
       call = error_call
@@ -106,42 +122,50 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
 
   typed_arg_desc <- function(type_call, arg_modifiers) {
     type_call_fun <- type_call[[1]]
-    suffix <- if (is_empty(arg_modifiers)) "" else paste0(" [", commas(sort(unique(arg_modifiers))), "]")
     maybe_alias <- eval(type_call_fun, env)
     if (is_alias(maybe_alias)) {
-      paste(attr(maybe_alias, "desc"), suffix)
+      desc <- attr(maybe_alias, "desc")
     } else {
-      sprintf("An object checked by `%s`.%s", rlang::as_label(type_call), suffix)
+      desc <- sprintf("An object checked by `%s`.", rlang::as_label(type_call))
     }
+    if (is_empty(arg_modifiers)) {
+      return(desc)
+    }
+    paste0(desc, " [", commas(sort(unique(arg_modifiers))), "]")
   }
 
-  # TODO: Document what this mega loop does
-  #
-  # For each argument in `function(arg1 = <expr1>, arg2 = <expr2>, ...)` we:
-  #
   for (i in seq_along(args)) {
 
     maybe_type_call <- args[[i]]
+    arg_name <- args_names[[i]]
+    arg_is_dots <- arg_name == "..."
+
     if (rlang::is_missing(maybe_type_call)) {
       next
     }
     if (is_defused_alias(maybe_type_call)) {
       maybe_type_call <- rlang::call2(maybe_type_call)
     }
-    # TODO: We may want to raise an error here and mandate that `untyped()` be
-    #       used explicitly to stop complex calls. We may also want to skip
-    #       calls to `base::c`.
-    if (!rlang::is_call_simple(maybe_type_call)) {
+    if (!rlang::is_call(maybe_type_call)) {
       next
     }
+    if (!rlang::is_call_simple(maybe_type_call)) {
+      call_label <- rlang::as_label(maybe_type_call)
+      typewriter_abort_invalid_input(
+        message = c(
+          sprintf("Can't type argument `%s` of `%s`.", arg_name, error_arg),
+          i = sprintf("Argument `%s` contains a complex call `%s`.", arg_name, call_label),
+          x = "Only simple calls (e.g. `ns::foo()` or `foo()`) may be used to type function arguments.",
+          i = sprintf("Use `%s = typewriter::untyped(%s)` to opt out of typing.", arg_name, call_label)
+        ),
+        call = error_call
+      )
+    }
 
-    arg_name <- args_names[[i]]
-    arg_is_dots <- arg_name == "..."
-
-    # In the <typed> function, we substitute `.__dot__.` with `..{i}` (e.g. `..1`)
-    # when type checking each of the `...` arguments, so that error messages can
-    # refer to a given dot by name.
-    arg_sym <- if (arg_is_dots) quote(.__dot__.) else rlang::sym(arg_name)
+    # In the <typed> function, we substitute `..i` with `..{i}` (e.g. `..1`)
+    # when type checking each of the `...` arguments, this allows error messages
+    # to refer to a given dot by name.
+    arg_sym <- if (arg_is_dots) quote(..i) else rlang::sym(arg_name)
     arg_modifiers <- character()
 
     # Strips and records modifiers, e.g. `maybe(required(f(x)))` -> `f(x)`. We
@@ -153,23 +177,38 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
         malformed_fun <- rlang::as_label(maybe_type_call[[1]])
         typewriter_abort_invalid_input(
           message = c(
-            "Can't convert `call` into a typed function.",
-            x = sprintf("Argument `%s` of `call` contains a malformed call to `%s()`.", arg_name, malformed_fun),
+            sprintf("Can't convert `%s` into a <typed> function.", error_arg),
+            x = sprintf(
+              "Argument `%s` of `%s` contains a malformed call to `%s()`.",
+              arg_name, error_arg,malformed_fun
+            ),
             x = sprintf("`%s` requires 1 argument, but %i were supplied.", malformed_fun, n_args)
           ),
           call = error_call
         )
-      } else if (!rlang::is_call(maybe_type_call[[2]])) {
+      }
+
+      # Modifiers expect a call as their argument (e.g. `static(check_int())`),
+      # but we also allow a named alias (e.g. `static(a_int)`). In this case, we
+      # are done stripping modifiers and can make the alias a call (e.g. `a_int()`).
+      if (is_defused_alias(maybe_type_call[[2]])) {
+        modifier <- get_modifier_name(maybe_type_call)
+        arg_modifiers <- c(arg_modifiers, modifier)
+        maybe_type_call <- rlang::call2(maybe_type_call[[2]])
+        break
+      }
+
+      if (!rlang::is_call(maybe_type_call[[2]])) {
         malformed_fun <- rlang::as_label(maybe_type_call[[1]])
         typewriter_abort_invalid_input(
           message = c(
-            "Can't convert `call` into a typed function.",
+            sprintf("Can't convert `%s` into a <typed> function.", error_arg),
             x = sprintf(
-              "Argument `%s` of `call` contains a malformed call to `%s()`.",
-              arg_name, malformed_fun
+              "Argument `%s` of `%s` contains a malformed call to `typewriter::%s()`.",
+              arg_name, error_arg, malformed_fun
             ),
             x = sprintf(
-              "`%s` requires a call as it's first argument, not %s.",
+              "`%s` requires a call or an <alias> as it's first argument, not %s.",
               malformed_fun, obj_type_friendly(maybe_type_call[[2]])
             )
           ),
@@ -186,8 +225,11 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
       if ("optional" %in% arg_modifiers) {
         typewriter_abort_invalid_input(
           message = c(
-            "Can't convert `call` into a typed function.",
-            x = sprintf("Argument `%s` of `call` contains calls to `required()` and `optional()`.", arg_name),
+            sprintf("Can't convert `%s` into a <typed> function.", error_arg),
+            x = sprintf(
+              "Argument `%s` of `%s` contains calls to `typewriter::required()` and `typewriter::optional()`.",
+              arg_name, error_arg
+            ),
             x = "Typed function arguments may be either optional or required, not both."
           ),
           call = error_call
@@ -214,8 +256,8 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
       if (n_args > 1) {
         typewriter_abort_invalid_input(
           message = c(
-            "Can't convert `call` into a typed function.",
-            x = sprintf("Argument `%s` of `call` contains a malformed call to `untyped()`.", arg_name),
+            "Can't convert `call` into a <typed> function.",
+            x = sprintf("Argument `%s` of `call` contains a malformed call to `typewriter::untyped()`.", arg_name),
             x = sprintf("`untyped` requires 1 argument, but %i were supplied.", n_args)
           ),
           call = error_call
@@ -225,28 +267,70 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
       } else {
         new_args[[i]] <-  maybe_type_call[[2]]
       }
+      # Argument is untyped, there's nothing left to do
       next
     }
 
-    # TODO: At this point we may want to check that the call function exists in `env`.
-    #
-    # maybe_function <- check_is_evaluable(maybe_type_call[[1]], env = env)
-    # check_is_function(maybe_function)
+    # Checking that `type_call` in `function(arg = type_call())` is a function
+    # that exists in `env`.
+    maybe_function_name <- rlang::as_label(maybe_type_call[[1]])
+    maybe_function <- check_is_evaluable(
+      maybe_type_call[[1]],
+      env = env,
+      message = c(
+        sprintf("Can't type argument `%s` of `call`.", arg_name),
+        i = sprintf("Argument `%s` contains a call to `%s`.", arg_name, maybe_function_name),
+        x = sprintf("Can't evaluate `%s` in `env = %s`.", maybe_function_name, env_desc(env))
+      ),
+      call = error_call
+    )
+    fun <- check_is_function(
+      maybe_function,
+      message = c(
+        sprintf("Can't type argument `%s` of `call`.", arg_name),
+        i = sprintf("Argument `%s` contains a malformed call to `%s`.", arg_name, maybe_function_name),
+        x = sprintf(
+          "`%s` is %s in `env = %s`, not a function.",
+          maybe_function_name, obj_type_friendly(maybe_function), env_desc(env)
+        )
+      ),
+      call = error_call
+    )
+    if (typeof(fun) %in% c("builtin", "special")) {
+      typewriter_abort_invalid_input(
+        message = c(
+          sprintf("Can't type argument `%s` of `call`.", arg_name),
+          i = sprintf(
+            'Argument `%s` contains a call to function `%s` of type "%s".',
+            arg_name, maybe_function_name, typeof(fun)
+          ),
+          x = sprintf(
+            'Arguments may only be typed with functions of type "closure", not "%s".',
+            typeof(fun)
+          )
+        ),
+        call = error_call
+      )
+    }
 
     call_args <- rlang::call_args(maybe_type_call)
     call_args_names <- rlang::names2(call_args)
 
     # Take the first argument of `call` to be the default value of the
     # corresponding argument, if the first argument to call is unnamed.
+    # Note, intentionally not forcing the initialization value to pass
+    # the `maybe_type_call(<value>, ...)` check, since a function author
+    # could plausibly want a default value to fail.
     if (length(call_args) != 0 && call_args_names[[1]] == "") {
-      # TODO: Test initialization value, note that you'll have to do this AFTER
-      #       you've added the modifiers, so you skip `NULL` or missing.
       if (arg_is_dots) {
         typewriter_abort_invalid_input(
           message = c(
-            "Can't convert `call` into a typed function.",
-            x = "Argument `...` of `call` can't have an initialization value.",
-            x = sprintf("Supplied an initialization value of `%s` to `...`.", rlang::as_label(call_args[[1]]))
+            sprintf("Can't convert `%s` into a <typed> function.", error_arg),
+            x = sprintf("Argument `...` of `call` can't have an initialization value.", error_arg),
+            x = sprintf(
+              "Supplied an initialization value of `%s` to `...`.",
+              rlang::as_label(call_args[[1]])
+            )
           ),
           call = error_call
         )
@@ -267,9 +351,15 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
     typed_args_descs <- c(typed_args_descs, typed_arg_desc(type_call, arg_modifiers))
     typed_args_names <- c(typed_args_names, arg_name)
 
-    # It's important that "maybe" comes before "optional", so we do
-    # `if (!missing(arg)) if (!is.null(arg)) call(arg)`
-    # in the correct order and prevent a missing argument error in `is.null`
+    # It's important that we order this "static" < "maybe" < "optional", so that
+    # `if (!missing(arg)) if (!is.null(arg)) assign_typed(arg, call(arg))`
+    # is in the correct order to prevent a missing argument error in `is.null`.
+    if ("static" %in% arg_modifiers) {
+      if (arg_is_dots) {
+        stop_incompatible_dots_modifier(modifier_name = "static")
+      }
+      type_call <- typed_assign_call(call = type_call, sym = arg_sym)
+    }
     if ("maybe" %in% arg_modifiers) {
       type_call <- if_not_null_call(call = type_call, sym = arg_sym)
     }
@@ -282,13 +372,13 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
 
     if (arg_is_dots) {
       # `eval(substitute(...))` here inserts the correct `..1`, `..2`, etc.
-      # symbol in place of `.__dot__.` in `type_call(.__dot__.)`. This allows
-      # functions which capture their argument name (e.g. `rlang::caller_arg()`)
-      # to reference the correct dot. We also prevent immediate evaluation of
-      # all the dots, at the expense of {rlang} injection support.
+      # symbol in place of `..i` in `type_call(..i)`. This allows functions
+      # which capture their argument name (e.g. `rlang::caller_arg()`) to
+      # reference the correct dot. We also prevent immediate evaluation of all
+      # dots, at the expense of {rlang} injection support.
       type_call <- rlang::expr({
-        for (.__dot__. in seq_len(...length())) {
-          eval(substitute(!!type_call, list(.__dot__. = as.symbol(paste0("..", .__dot__.)))))
+        for (..i in seq_len(...length())) {
+          eval(substitute(!!type_call, list(..i = as.symbol(paste0("..", ..i)))))
         }
       })[[2]] # Removes the redundant `{}` in `{ for (...) {...} }`
     }
@@ -313,6 +403,12 @@ new_typed_function <- function(args, body, env, error_call = rlang::caller_env()
 #' @export
 is_typed_function <- function(x) {
   inherits(x, "typewriter_typed_function")
+}
+
+#' @export
+has_typed_args <- function(x) {
+  check_is_function(x)
+  is_typed_function(x) && length(attr(x, "typed_args_names")) != 0L
 }
 
 #' @export
@@ -343,34 +439,34 @@ untype_function <- function(x) {
   x
 }
 
-
-# TODO: Use `cli::cat_bullet` if {cli} is available (check version if needed)
-#       and otherwise use a homegrown method. Or check the {rlang} standalone-cli
-#       for tips. I really just need to get the bullet symbol, don't overcomplicate.
-#       If {cli} not available, use "*" instead.
-#
-# TODO: Print a bulleted list of the typed arguments after the function definition
-#       using the `type_calls` attribute. Note if an argument is required, optional,
-#       or a maybe. If the type call is to an alias, use the alias description.
-#       Otherwise, say "type-checked with `call(arg, ...)`.
 #' @export
 print.typewriter_typed_function <- function(x, ...) {
-  # TODO: Don't print arguments if there are no typed args
-  arg_names <- paste0("`", attr(x, "typed_args_names"), "`")
-  arg_names <- sprintf(paste0("%-", max(nchar(arg_names)), "s"), arg_names)
-  bullets <- sprintf("* %s: %s\n", arg_names, attr(x, "typed_args_descs"))
-
   cat("<typed>\n")
   print(untype_function(x), ...)
-  cat("Typed Arguments:\n")
-  for (bullet in bullets) {
-    cat(bullet)
-  }
+  cat_typed_args(x)
 }
 
-# TODO: Divert the `cat()`-ing of typed argument descriptions to here
 cat_typed_args <- function(x) {
+  if (!has_typed_args(x)) {
+    return(invisible(NULL))
+  }
+  arg_names <- paste0("`", attr(x, "typed_args_names"), "`")
 
+  cat("Typed Arguments:\n")
+  if (rlang::is_installed("cli")) {
+    prefix <- cli::format_bullets_raw(rlang::set_names(arg_names, "*"))
+    # Pad bullets post-format, since {cli} collapses > 2 whitespace characters
+    bullets <- paste0(
+      prefix,
+      strrep(" ", max(nchar(arg_names)) - nchar(arg_names)), # Aligns the descriptions
+      ": ", attr(x, "typed_args_descs")
+    )
+    writeLines(bullets)
+  } else {
+    pad_names <- function(x) sprintf(paste0("%-", max(nchar(x)), "s"), x)
+    bullets <- sprintf("%s: %s", pad_names(arg_names), attr(x, "typed_args_descs"))
+    writeLines(paste("*", bullets))
+  }
 }
 
 if_not_missing_call <- function(call, sym) {
@@ -381,6 +477,28 @@ if_not_missing_call <- function(call, sym) {
 if_not_null_call <- function(call, sym) {
   not_null <- rlang::call2("!", rlang::call2("is.null", sym))
   rlang::call2("if", not_null, call)
+}
+
+# When we use this in a typed function we'll generate a body like:
+# function(x) {
+#   rethrow_parent_assignment_error(assign_typed(x, type_call(x, ...)))
+#   {
+#     # Implementation
+#   }
+# }
+# This (1) actively binds `x` in the typed function environment and (2) performs
+# the initial type check `type_call(x, ...)` on the input argument. We re-throw
+# only the parent error if (2) fails, since the child error references an
+# "invalid assignment" of `x <- x`, which doesn't make sense in this context.
+typed_assign_call <- function(call, sym) {
+  if (!identical(call[[2]], sym)) {
+    typewriter_abort(
+      "Expected first argument of `call` to be `sym`.",
+      internal = TRUE
+    )
+  }
+  assign_call <- rlang::call2("assign_typed", sym, call, .ns = "typewriter")
+  rlang::call2("rethrow_parent_assignment_error", assign_call, .ns = "typewriter")
 }
 
 call_prepend_args <- function(call, ...) {
@@ -398,6 +516,11 @@ call_prepend_args <- function(call, ...) {
 
 #' @export
 untyped <- function(x) {
+  typewriter_stop_invalid_context()
+}
+
+#' @export
+static <- function(x) {
   typewriter_stop_invalid_context()
 }
 
@@ -421,7 +544,7 @@ is_untyped_call <- function(x) {
 }
 
 is_modified_call <- function(x) {
-  modifiers <- c("required", "optional", "maybe")
+  modifiers <- c("required", "optional", "maybe", "static")
   rlang::is_call(x, name = modifiers, ns = c("", "typewriter"))
 }
 
@@ -452,6 +575,18 @@ typewriter_stop_invalid_context <- function() {
 # are injected into `typed()` functions and thus need to be made available to
 # the user.
 
+# This is useful in conjunction with `static()`, since we use `assign_typed()`
+# within the function, but only the child error makes sense in that context.
+#' @export
+rethrow_parent_assignment_error <- function(expr) {
+  rlang::try_fetch(
+    expr = expr,
+    typewriter_error_invalid_assignment = function(cnd) {
+      rlang::cnd_signal(cnd$parent)
+    }
+  )
+}
+
 #' @export
 check_required_arg <- function(x) {
   if (!missing(x)) {
@@ -461,21 +596,5 @@ check_required_arg <- function(x) {
     message = sprintf("`%s` is absent but must be supplied.", rlang::caller_arg(x)),
     call = rlang::caller_env(),
     class = "typewriter_error_typed_arg_missing"
-  )
-}
-
-#' @export
-check_dot <- function(expr, i) {
-  call <- rlang::caller_env()
-  rlang::try_fetch(
-    expr,
-    error = function(cnd) {
-      typewriter_abort(
-        message = sprintf("Argument `..%i` failed a type check.", i),
-        call = call,
-        class = "typewriter_error_typed_dot_invalid",
-        parent = cnd
-      )
-    }
   )
 }
