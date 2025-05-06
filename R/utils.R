@@ -1,7 +1,3 @@
-is_try_error <- function(x) {
-  class(x)[[1]] == "try-error"
-}
-
 is_empty <- function(x) {
   length(x) == 0L
 }

@@ -1,5 +1,6 @@
 # todos ------------------------------------------------------------------------
 
+# TODO: Check is string and check is character for `alias(name, desc, bullets)`
 
 # check ------------------------------------------------------------------------
 
@@ -8,12 +9,25 @@ check_is_symbol <- function(
     x_name = rlang::caller_arg(x),
     call = rlang::caller_env()
   ) {
-
   if (rlang::is_symbol(x)) {
     return(x)
   }
   typewriter_abort_invalid_input(
     sprintf("`%s` must be a symbol, not %s.", x_name, obj_type_friendly(x)),
+    call = call
+  )
+}
+
+check_is_environment <- function(
+    x,
+    x_name = rlang::caller_arg(x),
+    call = rlang::caller_env()
+) {
+  if (is.environment(x)) {
+    return(x)
+  }
+  typewriter_abort_invalid_input(
+    sprintf("`%s` must be an environment, not %s.", x_name, obj_type_friendly(x)),
     call = call
   )
 }
@@ -24,8 +38,6 @@ check_is_simple_call <- function(
     message = NULL,
     call = rlang::caller_env()
 ) {
-  # TODO: `foo[[1]]` and `foo$bar` are simple calls, so we don't catch them here,
-  #       but I think we CAN prevent special and primitive calls to fix this issue.
   if (rlang::is_call_simple(x)) {
     return(x)
   }
@@ -51,7 +63,6 @@ check_is_evaluable <- function(
     message = NULL,
     call = rlang::caller_env()
 ) {
-
   if (rlang::is_quosure(x)) {
     env <- rlang::quo_get_env(x)
     x <- rlang::quo_get_expr(x)
@@ -75,7 +86,6 @@ check_is_function <- function(
     message = NULL,
     call = rlang::caller_env()
 ) {
-
   if (is.function(x)) {
     return(x)
   }
