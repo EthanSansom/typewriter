@@ -2,14 +2,16 @@
 
 # TODO: Test `name` and `desc` once incorporated.
 
+# TODO: Check the use of external package checks using:
+# - rlang::rlang::arg_match
+# - rlang::check_required
+#
+# We could also add {chk} to Suggests..., might be worth it for documentation
+# sake. Look back at how {friendlynumber} used Suggested package {bignum} in
+# tests, examples, and documentation.
+
 # tests ------------------------------------------------------------------------
 test_that("`alias()` works", {
-  check_integer <- function(x, len = NULL) {
-    if (!(is.integer(x) && (is.null(len) || length(x) == len))) {
-      rlang::abort("Invalid integer", class = "invalid_input")
-    }
-  }
-
   a_int <- alias(check_integer())
   a_scalar_int <- alias(check_integer(len = 1L))
 
@@ -20,12 +22,6 @@ test_that("`alias()` works", {
 })
 
 test_that("`alias()` works with `%<-%` and `assign_typed()`", {
-  check_integer <- function(x, len = NULL) {
-    if (!(is.integer(x) && (is.null(len) || length(x) == len))) {
-      rlang::abort("Invalid integer", class = "invalid_input")
-    }
-  }
-
   a_int <- alias(check_integer())
   a_scalar_int <- alias(check_integer(len = 1L))
 
@@ -54,14 +50,30 @@ test_that("`alias()` works with `%<-%` and `assign_typed()`", {
 })
 
 test_that("`alias()` errors on invalid inputs.", {
-  check_integer <- function(x, len = NULL) {
-    if (!(is.integer(x) && (is.null(len) || length(x) == len))) {
-      rlang::abort("Invalid integer", class = "invalid_input")
-    }
-  }
-
   expect_error(alias(10), class = "typewriter_error_invalid_input")
   expect_error(alias(check_integer), class = "typewriter_error_invalid_input")
   expect_error(alias(check_integer(len = stop())), class = "typewriter_error_invalid_input")
   expect_error(alias(non_extant_function()), class = "typewriter_error_invalid_input")
+})
+
+test_that("`alias()` prints nicely.", {
+  skip_on_cran()
+
+  a_int <- alias(
+    call = check_integer(),
+    name = "integer",
+    desc = "An integer vector.",
+    bullets = c(
+      "unnamed",
+      "named" = "named",
+      " " = "space",
+      "i" = "i",
+      "x" = "x",
+      "v" = "v",
+      "!" = "!",
+      "*" = "*",
+      ">" = ">"
+    )
+  )
+  expect_snapshot(print(a_int))
 })

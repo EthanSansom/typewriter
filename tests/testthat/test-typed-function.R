@@ -3,19 +3,17 @@
 # - errors on invalid inputs
 # - test `as_typed()` once finished
 
+# TODO: Check the use of external package checks using:
+# - rlang::rlang::arg_match
+# - rlang::check_required
+#
+# We could also add {chk} to Suggests..., might be worth it for documentation
+# sake. Look back at how {friendlynumber} used Suggested package {bignum} in
+# tests, examples, and documentation.
+
 # tests ------------------------------------------------------------------------
 
 test_that("`typed()` works.", {
-  check_integer <- function(x, len = NULL) {
-    if (!(is.integer(x) && (is.null(len) || length(x) == len))) {
-      rlang::abort(
-        message = sprintf("Invalid object %s", rlang::caller_arg(x)),
-        class = "invalid_input"
-      )
-    }
-  }
-  check_integer_alias <- alias(check_integer())
-
   fun <- typed(function(
       x = check_integer(),
       y = check_integer_alias,
@@ -79,18 +77,57 @@ test_that("`typed()` works.", {
   )
 })
 
-test_that("`typed()` works with `...` argument.", {
-  check_integer <- function(x, len = NULL) {
-    if (!(is.integer(x) && (is.null(len) || length(x) == len))) {
-      rlang::abort(
-        message = sprintf("Invalid object %s", rlang::caller_arg(x)),
-        class = "invalid_input",
-        call = rlang::caller_env()
-      )
-    }
-  }
-  check_integer_alias <- alias(check_integer())
+test_that("`typed()` errors on invalid inputs.", {
+  expect_error(typed(10), class = "typewriter_error_invalid_input")
+  expect_error(typed(quote(x)), class = "typewriter_error_invalid_input")
 
+  # Calls must be to functions which exist in `env`
+  not_a_function <- 10L
+  expect_error(
+    typed(function(x = not_a_function()) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = non_extant_function()) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = non_extant_ns::non_extant_function()) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  # Calls must be simple calls
+  expect_error(
+    typed(function(x = bar$foo()) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = bar()()) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  # Can't use primitive or special functions
+  expect_error(
+    typed(function(x = bar$foo) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = sum()) {}),
+    class = "typewriter_error_invalid_input"
+  )
+})
+
+test_that("`typed()` works with no typed arguments.", {
+  foo1 <- typed(function() { TRUE })
+  foo2 <- typed(function(x, y, ..., z = 10) { TRUE })
+
+  expect_true(is_typed_function(foo1))
+  expect_true(is_typed_function(foo2))
+  expect_length(attr(foo1, "typed_args_names"), 0)
+  expect_length(attr(foo2, "typed_args_names"), 0)
+  expect_true(foo1())
+  expect_true(foo2(x = 1, y = 2, 1))
+})
+
+test_that("`typed()` works with `...` argument.", {
   dots_only <- typed(function(... = check_integer()) { TRUE })
   dots_only_alias <- typed(function(... = check_integer_alias) { TRUE })
   dots_and_others <- typed(function(... = check_integer(), x = check_integer(10L)) { TRUE })
@@ -128,4 +165,75 @@ test_that("`typed()` works with `...` argument.", {
     regexp = "Invalid object x",
     fixed = TRUE
   )
+})
+
+# modifiers --------------------------------------------------------------------
+
+# TODO:
+# - maybe(), optional(), required()
+# - test whether combinations of modifiers work as expected
+
+test_that("`untyped()` modifier works.", {
+  foo1 <- typed(function(x = untyped()) { TRUE })
+  foo2 <- typed(function(x = untyped(as.Date("2020-01-01"))) { TRUE })
+
+  expect_true(is_typed_function(foo1))
+  expect_true(is_typed_function(foo2))
+  expect_identical(formals(foo1), rlang::pairlist2(x = ))
+  expect_identical(formals(foo2), rlang::pairlist2(x = quote(as.Date("2020-01-01"))))
+  expect_true(foo1())
+  expect_true(foo2())
+
+  expect_error(
+    typed(function(... = untyped()) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = untyped(1, 1)) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+})
+
+test_that("`optional()` modifier works.", {
+  foo <- typed(function(x = optional(check_integer())) {
+    if (rlang::is_missing(x)) rlang::missing_arg() else x
+  })
+
+  expect_error(foo("A"), class = "invalid_input")
+  expect_identical(foo(1L), 1L)
+  expect_identical(foo(), rlang::missing_arg())
+
+  expect_error(
+    typed(function(x = optional(1, 1)) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = optional()) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = optional(required(check_integer()))) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+})
+
+test_that("`static()` modifier works.", {
+  foo_bad <- typed(function(x = static(check_integer())) {
+    x <- "A"
+  })
+  foo_good <- typed(function(x = static(check_integer())) {
+    x <- 10L
+    x
+  })
+
+  # If the input argument is bad, we should raise the `check_integer()` error
+  expect_error(foo_bad("A"), class = "invalid_input")
+  expect_error(foo_good("A"), class = "invalid_input")
+
+  # If the "statically" typed object `x` is re-assigned in `foo_bad()`, we
+  # should raise an assignment error.
+  expect_error(foo_bad(10L), class = "typewriter_error_invalid_assignment")
+
+  expect_no_error(foo_good(10L))
+  expect_identical(foo_good(1L), 10L)
 })
