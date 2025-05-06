@@ -1,6 +1,6 @@
 # todos ------------------------------------------------------------------------
 
-# TODO: `as_alias()` takes a function, we wrap it and supply it's first argument
+# TODO: Rename `alias` to `type_alias`, since `alias` is a function in {stats}
 
 # TODO: What do we do with the alias when the first argument is unnamed?
 # - This is normally the initialization value, but not in our context
@@ -13,6 +13,7 @@
 
 # functions --------------------------------------------------------------------
 
+#' @export
 alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
   call <- check_is_simple_call(x = rlang::enexpr(call), x_name = "call")
   error_call <- rlang::current_env()
@@ -36,7 +37,10 @@ alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
     message = c(
       "`call` must be a simple call.",
       x = sprintf("`call` is a malformed call to `%s`.", rlang::as_label(call_fun_sym)),
-      x = sprintf("`%s` is %s in `env = %s`, not a function.", env_desc(env), obj_type_friendly(maybe_function))
+      x = sprintf(
+        "`%s` is %s in `env = %s`, not a function.",
+        rlang::as_label(call_fun_sym), obj_type_friendly(maybe_function), env_desc(env)
+      )
     ),
     call = error_call
   )
@@ -101,12 +105,39 @@ alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
   new_alias(
     fun = out,
     name = name %||% rlang::as_name(call_fun_sym),
-    desc = desc %||% rlang::as_label(call),
+    desc = desc %||% sprintf("An object checked using `%s`.", rlang::as_label(call)),
     bullets = bullets
   )
 }
 
 utils::globalVariables("!<-")
+
+#' @export
+is_alias <- function(x) {
+  inherits(x, "typewriter_alias")
+}
+
+#' @export
+print.typewriter_alias <- function(x, ...) {
+  cat(sprintf("<alias<%s>>\n", attr(x, "name")))
+  cat(paste0(attr(x, "desc"), "\n"))
+  cat_alias_bullets(x)
+}
+
+cat_alias_bullets <- function(x) {
+  bullets <- attr(x, "bullets")
+  if (rlang::is_installed("cli")) {
+    writeLines(cli::cli_fmt(cli::cli_bullets(bullets)))
+  } else {
+    # {cli} interprets names in `cli_marks` as bullet marks and ignores all
+    # other names, so we do the same here to match.
+    cli_marks <- c(" ", "i", "x", "v", "!", "*", ">")
+    bullet_names <- rlang::names2(bullets)
+    cli_bullet <- bullet_names %in% cli_marks
+    bullets[cli_bullet] <- paste(bullet_names[cli_bullet], bullets[cli_bullet])
+    writeLines(bullets)
+  }
+}
 
 new_alias <- function(fun, name, desc, bullets) {
   structure(
@@ -116,19 +147,6 @@ new_alias <- function(fun, name, desc, bullets) {
     desc = desc,
     bullets = bullets
   )
-}
-
-is_alias <- function(x) {
-  inherits(x, "typewriter_alias")
-}
-
-#' @export
-print.typewriter_alias <- function(x, ...) {
-  cat(sprintf("<alias<%s>>\n", attr(x, "name")))
-  # cat(paste0(attr(x, "desc"), "\n"))
-
-  # TODO: For testing, set back to old version later.
-  print(unclass(x))
 }
 
 # helpers ----------------------------------------------------------------------
