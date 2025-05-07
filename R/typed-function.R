@@ -265,65 +265,6 @@ new_typed_function <- function(
       next
     } # Handled an `untyped()` argument, if necessary
 
-    # TODO: I think we should relax this check, since it's possible that I'm
-    #       typing a function with a check that doesn't yet exist, but will be
-    #       defined. For example, I'm running this in a package where the type-checks
-    #       are defined in another script but *will* exist by the time this function
-    #       is called. Or, in a non-package context, I've just defined my checks
-    #       further down in the same script.
-    #
-    #       This is closer to actual function definitions, where the following is possible:
-    #>
-    #> foo <- function(x) {
-    #>   bar(x)
-    #> }
-    #>  foo(10) # Error in bar(x) : could not find function "bar"
-    #>
-    #>  bar <- function(x) x
-    #>  foo(10) # 10
-    #
-    # Checking that `type_call` in `function(arg = type_call())` is a function
-    # that exists in `env`.
-    maybe_function_name <- rlang::as_label(maybe_type_call[[1]])
-    maybe_function <- check_is_evaluable(
-      maybe_type_call[[1]],
-      env = env,
-      message = c(
-        sprintf("Can't type argument `%s` of `call`.", arg_name),
-        i = sprintf("Argument `%s` contains a call to `%s`.", arg_name, maybe_function_name),
-        x = sprintf("Can't evaluate `%s` in `env = %s`.", maybe_function_name, env_desc(env))
-      ),
-      call = error_call
-    )
-    fun <- check_is_function(
-      maybe_function,
-      message = c(
-        sprintf("Can't type argument `%s` of `call`.", arg_name),
-        i = sprintf("Argument `%s` contains a malformed call to `%s`.", arg_name, maybe_function_name),
-        x = sprintf(
-          "`%s` is %s in `env = %s`, not a function.",
-          maybe_function_name, obj_type_friendly(maybe_function), env_desc(env)
-        )
-      ),
-      call = error_call
-    )
-    if (typeof(fun) %in% c("builtin", "special")) {
-      typewriter_abort_invalid_input(
-        message = c(
-          sprintf("Can't type argument `%s` of `call`.", arg_name),
-          i = sprintf(
-            'Argument `%s` contains a call to function `%s` of type "%s".',
-            arg_name, maybe_function_name, typeof(fun)
-          ),
-          x = sprintf(
-            'Arguments may only be typed with functions of type "closure", not "%s".',
-            typeof(fun)
-          )
-        ),
-        call = error_call
-      )
-    } # `maybe_type_call` is confirmed to be a call to a function in `env`
-
     call_args <- rlang::call_args(maybe_type_call)
     call_args_names <- rlang::names2(call_args)
 
