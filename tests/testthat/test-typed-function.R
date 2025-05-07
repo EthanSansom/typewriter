@@ -223,7 +223,7 @@ test_that("`optional()` modifier works.", {
     class = "typewriter_error_invalid_input"
   )
   expect_error(
-    typed(function(x = untyped(1)) { TRUE }),
+    typed(function(x = optional(1)) { TRUE }),
     class = "typewriter_error_invalid_input"
   )
   expect_error(
