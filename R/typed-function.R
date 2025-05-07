@@ -47,10 +47,10 @@ as_typed_function <- function(.fun, ...) {
 
   if (!all(typed_args_names %in% names(args))) {
     bad_arg_name <- typed_args_names[[which.min(typed_args_names %in% names(args))]]
-    typewriter_abort(
+    typewriter_abort_invalid_input(
       message = c(
         "Can't convert `.fun` to a typed function.",
-        x = "Argument `%s` supplied to `...` is not a formal argument of `.fun`."
+        x = sprintf("Argument `%s` in `...` is not a formal argument of `.fun`.", bad_arg_name)
       )
     )
   }
@@ -117,7 +117,7 @@ new_typed_function <- function(
 
   typed_arg_desc <- function(type_call, arg_modifiers) {
     type_call_fun <- type_call[[1]]
-    maybe_alias <- eval(type_call_fun, env)
+    maybe_alias <- try(eval(type_call_fun, env), silent = TRUE)
     if (is_alias(maybe_alias)) {
       desc <- attr(maybe_alias, "desc")
     } else {
@@ -234,7 +234,7 @@ new_typed_function <- function(
       }
       check <- rlang::call2("check_required_arg", arg_sym, .ns = "typewriter")
       type_calls <- append(type_calls, check)
-    } # Added a `required()` check, if neccisary
+    } # Added a `required()` check, if necessary
 
     # Converts `function(arg = untyped(<expr>))`, to `function(arg = <expr>)`.
     # We skip the `optional()` and `maybe()` modifiers for untyped arguments,
@@ -278,7 +278,7 @@ new_typed_function <- function(
         typewriter_abort_invalid_input(
           message = c(
             sprintf("Can't convert `%s` into a <typed> function.", error_arg),
-            x = sprintf("Argument `...` of `call` can't have an initialization value.", error_arg),
+            x = sprintf("Argument `...` of `%s` can't have an initialization value.", error_arg),
             x = sprintf(
               "Supplied an initialization value of `%s` to `...`.",
               rlang::as_label(call_args[[1]])
@@ -354,10 +354,7 @@ new_typed_function <- function(
 
 call_prepend_args <- function(call, ...) {
   if (!is.call(call)) {
-    typewriter_abort(
-      sprintf("Expected `call` to be a call, not %s", typeof(call)),
-      internal = TRUE
-    )
+    typewriter_abort(sprintf("Expected `call` to be a call, not %s", typeof(call)), internal = TRUE) # nocov
   }
   call_args <- as.list(call[-1])
   rlang::call_modify(call[1], !!!rlang::enexprs(...), !!!call_args)
@@ -386,10 +383,7 @@ if_not_null_call <- function(call, sym) {
 # "invalid assignment" of `x <- x`, which doesn't make sense in this context.
 typed_assign_call <- function(call, sym) {
   if (!identical(call[[2]], sym)) {
-    typewriter_abort(
-      "Expected first argument of `call` to be `sym`.",
-      internal = TRUE
-    )
+    typewriter_abort("Expected first argument of `call` to be `sym`.", internal = TRUE) # nocov
   }
   assign_call <- rlang::call2("assign_typed", sym, call, .ns = "typewriter")
   rlang::call2("rethrow_parent_assignment_error", assign_call, .ns = "typewriter")

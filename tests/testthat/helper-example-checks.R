@@ -13,6 +13,16 @@ check_integer <- function(x, len = NULL) {
   }
 }
 
+check_character <- function(x, len = NULL) {
+  if (!(is.character(x) && (is.null(len) || length(x) == len))) {
+    rlang::abort(
+      message = sprintf("Invalid object %s", rlang::caller_arg(x)),
+      class = "invalid_input",
+      call = rlang::caller_env()
+    )
+  }
+}
+
 # aliases ----------------------------------------------------------------------
 
 check_integer_alias <- alias(check_integer())

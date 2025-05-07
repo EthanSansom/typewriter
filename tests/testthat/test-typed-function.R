@@ -77,24 +77,21 @@ test_that("`typed()` works.", {
   )
 })
 
+test_that("`typed()` allows the use of undefined functions.", {
+  not_a_function <- 10L
+  foo_1 <- typed(function(x = not_a_function()) {})
+  foo_2 <- typed(function(x = non_extant_function()) {})
+  foo_3 <- typed(function(x = non_extant_ns::non_extant_function()) {})
+
+  expect_true(is_typed_function(foo_1))
+  expect_true(is_typed_function(foo_2))
+  expect_true(is_typed_function(foo_3))
+})
+
 test_that("`typed()` errors on invalid inputs.", {
   expect_error(typed(10), class = "typewriter_error_invalid_input")
   expect_error(typed(quote(x)), class = "typewriter_error_invalid_input")
 
-  # Calls must be to functions which exist in `env`
-  not_a_function <- 10L
-  expect_error(
-    typed(function(x = not_a_function()) {}),
-    class = "typewriter_error_invalid_input"
-  )
-  expect_error(
-    typed(function(x = non_extant_function()) {}),
-    class = "typewriter_error_invalid_input"
-  )
-  expect_error(
-    typed(function(x = non_extant_ns::non_extant_function()) {}),
-    class = "typewriter_error_invalid_input"
-  )
   # Calls must be simple calls
   expect_error(
     typed(function(x = bar$foo()) {}),
@@ -104,13 +101,22 @@ test_that("`typed()` errors on invalid inputs.", {
     typed(function(x = bar()()) {}),
     class = "typewriter_error_invalid_input"
   )
-  # Can't use primitive or special functions
+  # `..i` is a reserved symbol
   expect_error(
-    typed(function(x = bar$foo) {}),
+    typed(function(x = ..i) {}),
     class = "typewriter_error_invalid_input"
   )
   expect_error(
-    typed(function(x = sum()) {}),
+    typed(function(x = untyped(..i)) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = check_integer(..i)) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  # `...` can't have an initialization value
+  expect_error(
+    typed(function(... = check_integer(10L)) {}),
     class = "typewriter_error_invalid_input"
   )
 })
@@ -198,13 +204,26 @@ test_that("`optional()` modifier works.", {
   foo <- typed(function(x = optional(check_integer())) {
     if (rlang::is_missing(x)) rlang::missing_arg() else x
   })
+  bar <- typed(function(x = optional(check_integer_alias)) {
+    if (rlang::is_missing(x)) rlang::missing_arg() else x
+  })
 
+  expect_true(is_typed_function(foo))
   expect_error(foo("A"), class = "invalid_input")
   expect_identical(foo(1L), 1L)
   expect_identical(foo(), rlang::missing_arg())
 
+  expect_true(is_typed_function(bar))
+  expect_error(bar("A"), class = "invalid_input")
+  expect_identical(bar(1L), 1L)
+  expect_identical(bar(), rlang::missing_arg())
+
   expect_error(
     typed(function(x = optional(1, 1)) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = untyped(1)) { TRUE }),
     class = "typewriter_error_invalid_input"
   )
   expect_error(
@@ -213,6 +232,10 @@ test_that("`optional()` modifier works.", {
   )
   expect_error(
     typed(function(x = optional(required(check_integer()))) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(... = optional(check_integer())) { TRUE }),
     class = "typewriter_error_invalid_input"
   )
 })
