@@ -113,7 +113,10 @@ assert_dots_named <- function(..., message = NULL, call = rlang::caller_env()) {
   typewriter_abort_invalid_input(
     message = c(
       "Arguments supplied to `...` must be named.",
-      x = sprintf("Argument%s `%s` are unnanmed.", ngettext(n_unnamed_dots, "", "s"), unnamed_dots)
+      x = sprintf(
+        "Argument%s `%s` %s unnanmed.",
+        ngettext(n_unnamed_dots, "", "s"), unnamed_dots, ngettext(n_unnamed_dots, "is", "are")
+      )
     ),
     call = call
   )
