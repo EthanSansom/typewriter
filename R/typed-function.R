@@ -464,27 +464,27 @@ cat_typed_args <- function(x) {
 
 #' @export
 untyped <- function(x) {
-  typewriter_stop_invalid_context()
+  typewriter_stop_invalid_context() # nocov
 }
 
 #' @export
 static <- function(x) {
-  typewriter_stop_invalid_context()
+  typewriter_stop_invalid_context() # nocov
 }
 
 #' @export
 required <- function(x) {
-  typewriter_stop_invalid_context()
+  typewriter_stop_invalid_context() # nocov
 }
 
 #' @export
 optional <- function(x) {
-  typewriter_stop_invalid_context()
+  typewriter_stop_invalid_context() # nocov
 }
 
 #' @export
 maybe <- function(x) {
-  typewriter_stop_invalid_context()
+  typewriter_stop_invalid_context() # nocov
 }
 
 is_untyped_call <- function(x) {
@@ -496,7 +496,7 @@ is_modified_call <- function(x) {
   rlang::is_call(x, name = modifiers, ns = c("", "typewriter"))
 }
 
-get_modifier_name <- function(modifier_call) {
+get_modifier_name <- function(modifier_call) { # nocov start
   modifier <- modifier_call[[1]]
   switch(
     expr_type(modifier),
@@ -507,7 +507,7 @@ get_modifier_name <- function(modifier_call) {
       internal = TRUE
     )
   )
-}
+} # nocov end
 
 typewriter_stop_invalid_context <- function() {
   typewriter_abort(
@@ -534,7 +534,7 @@ rethrow_parent_assignment_error <- function(expr) {
 }
 
 #' @export
-check_required_arg <- function(x) {
+check_required_arg <- function(x) { # nocov start
   if (!missing(x)) {
     return(invisible(TRUE))
   }
@@ -543,4 +543,4 @@ check_required_arg <- function(x) {
     call = rlang::caller_env(),
     class = "typewriter_error_typed_arg_missing"
   )
-}
+} # nocov end

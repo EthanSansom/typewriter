@@ -77,15 +77,32 @@ test_that("`typed()` works.", {
   )
 })
 
+test_that("`typed()` works with package checks.", {
+  foo <- typed(function(x = chk::chk_character()) { x })
+
+  expect_identical(foo("A"), "A")
+  expect_error(foo(10L))
+
+  withr::local_package("chk")
+  bar <- typed(function(... = chk_count()) { list(...) })
+
+  expect_identical(bar(1L, 2.0), list(1L, 2.0))
+  expect_error(bar(1L, 7.5))
+})
+
 test_that("`typed()` allows the use of undefined functions.", {
   not_a_function <- 10L
   foo_1 <- typed(function(x = not_a_function()) {})
   foo_2 <- typed(function(x = non_extant_function()) {})
   foo_3 <- typed(function(x = non_extant_ns::non_extant_function()) {})
+  foo_4 <- typed(function(x = required(not_a_function())) {})
 
   expect_true(is_typed_function(foo_1))
   expect_true(is_typed_function(foo_2))
   expect_true(is_typed_function(foo_3))
+  expect_true(is_typed_function(foo_4))
+
+  expect_error(foo_4(), class = "typewriter_error_typed_arg_missing")
 })
 
 test_that("`typed()` errors on invalid inputs.", {
@@ -175,10 +192,6 @@ test_that("`typed()` works with `...` argument.", {
 
 # modifiers --------------------------------------------------------------------
 
-# TODO:
-# - maybe(), optional(), required()
-# - test whether combinations of modifiers work as expected
-
 test_that("`untyped()` modifier works.", {
   foo1 <- typed(function(x = untyped()) { TRUE })
   foo2 <- typed(function(x = untyped(as.Date("2020-01-01"))) { TRUE })
@@ -240,6 +253,76 @@ test_that("`optional()` modifier works.", {
   )
 })
 
+test_that("`required()` modifier works.", {
+  foo <- typed(function(x = required(check_integer())) {
+    x
+  })
+  bar <- typed(function(x = required(check_integer_alias)) {
+    x
+  })
+
+  expect_true(is_typed_function(foo))
+  expect_identical(foo(1L), 1L)
+  expect_error(foo("A"), class = "invalid_input")
+  expect_error(foo(), class = "typewriter_error_typed_arg_missing")
+
+  expect_true(is_typed_function(bar))
+  expect_identical(bar(1L), 1L)
+  expect_error(bar("A"), class = "invalid_input")
+  expect_error(bar(), class = "typewriter_error_typed_arg_missing")
+
+  expect_error(
+    typed(function(x = required(1, 1)) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = required(1)) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = required()) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = required(optional(check_integer()))) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(... = required(check_integer())) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+})
+
+test_that("`maybe()` modifier works.", {
+  foo <- typed(function(x = maybe(check_integer())) { x })
+  bar <- typed(function(x = maybe(check_integer_alias)) { x })
+  baz <- typed(function(... = maybe(check_integer())) { list(...) })
+
+  expect_identical(foo(1L), 1L)
+  expect_identical(foo(NULL), NULL)
+  expect_error(foo("A"), class = "invalid_input")
+
+  expect_identical(bar(1L), 1L)
+  expect_identical(bar(NULL), NULL)
+  expect_error(bar("A"), class = "invalid_input")
+
+  expect_identical(baz(1L, NULL, 1:5), list(1L, NULL, 1:5))
+  expect_error(baz(1L, NULL, "A"), class = "invalid_input")
+
+  expect_error(
+    typed(function(x = maybe(1, 1)) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = maybe(1)) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = maybe()) { TRUE }),
+    class = "typewriter_error_invalid_input"
+  )
+})
+
 test_that("`static()` modifier works.", {
   foo_bad <- typed(function(x = static(check_integer())) {
     x <- "A"
@@ -259,4 +342,155 @@ test_that("`static()` modifier works.", {
 
   expect_no_error(foo_good(10L))
   expect_identical(foo_good(1L), 10L)
+
+  expect_error(
+    typed(function(... = static(check_integer())) {}),
+    class = "typewriter_error_invalid_input"
+  )
+})
+
+test_that("Modifier combinations work.", {
+  maybe_optional <- typed(function(x = maybe(optional(check_integer()))) {
+    if (rlang::is_missing(x)) rlang::missing_arg() else x
+  })
+  maybe_required <- typed(function(x = maybe(required(check_integer()))) {
+    x
+  })
+  static_optional <- typed(function(x = static(optional(check_integer()))) {
+    if (rlang::is_missing(x)) rlang::missing_arg() else x
+  })
+  static_required <- typed(function(x = static(required(check_integer()))) {
+    x
+  })
+  maybe_static_optional <- typed(function(x = maybe(static(optional(check_integer())))) {
+    if (rlang::is_missing(x)) rlang::missing_arg() else x
+  })
+  maybe_static_required <- typed(function(x = maybe(static(required(check_integer())))) {
+    x
+  })
+
+  expect_identical(maybe_optional(1L), 1L)
+  expect_identical(maybe_optional(NULL), NULL)
+  expect_identical(maybe_optional(), rlang::missing_arg())
+  expect_error(maybe_optional("A"), class = "invalid_input")
+
+  expect_identical(maybe_required(1L), 1L)
+  expect_identical(maybe_required(NULL), NULL)
+  expect_error(maybe_required(), class = "typewriter_error_typed_arg_missing")
+  expect_error(maybe_required("A"), class = "invalid_input")
+
+  expect_identical(static_optional(1L), 1L)
+  expect_identical(static_optional(), rlang::missing_arg())
+  expect_error(static_optional("A"), class = "invalid_input")
+
+  expect_identical(static_required(1L), 1L)
+  expect_error(static_required(), class = "typewriter_error_typed_arg_missing")
+  expect_error(static_required("A"), class = "invalid_input")
+
+  expect_identical(maybe_static_optional(1L), 1L)
+  expect_identical(maybe_static_optional(NULL), NULL)
+  expect_identical(maybe_static_optional(), rlang::missing_arg())
+  expect_error(maybe_static_optional("A"), class = "invalid_input")
+
+  expect_identical(maybe_static_required(1L), 1L)
+  expect_identical(maybe_static_required(NULL), NULL)
+  expect_error(maybe_static_required(), class = "typewriter_error_typed_arg_missing")
+  expect_error(maybe_static_required("A"), class = "invalid_input")
+
+  # Only the modifier set is important (e.g. ordering isn't important)
+  expect_identical(
+    maybe_required,
+    typed(function(x = required(maybe(check_integer()))) { x })
+  )
+  expect_identical(
+    static_required,
+    typed(function(x = required(static(check_integer()))) { x })
+  )
+  expect_identical(
+    maybe_static_required,
+    typed(function(x = required(maybe(static(check_integer())))) { x })
+  )
+  expect_identical(
+    maybe_required,
+    typed(function(x = maybe(required(required(maybe(check_integer()))))) { x })
+  )
+
+  # Static works as expected
+  bad_static_optional <- typed(function(x = static(optional(check_integer()))) {
+    x <- "A"
+  })
+  bad_maybe_static_optional <- typed(function(x = maybe(static(optional(check_integer())))) {
+    x <- "A"
+  })
+
+  expect_error(bad_static_optional(10L), class = "typewriter_error_invalid_assignment")
+  expect_error(bad_maybe_static_optional(10L), class = "typewriter_error_invalid_assignment")
+
+  # We don't "statically" type an un-supplied optional or `NULL` maybe argument
+  expect_no_error(bad_static_optional())
+  expect_no_error(bad_maybe_static_optional())
+  expect_no_error(bad_maybe_static_optional(NULL))
+})
+
+test_that("Namespaced modifiers work as expected.", {
+  foo_maybe <- typed(function(x = typewriter::maybe(check_integer())) {
+    x
+  })
+  foo_maybe_required <- typed(function(x = typewriter::maybe(typewriter::required(check_integer()))) {
+    x
+  })
+
+  expect_identical(foo_maybe(1L), 1L)
+  expect_identical(foo_maybe(NULL), NULL)
+  expect_error(foo_maybe("A"), class = "invalid_input")
+
+  expect_identical(foo_maybe_required(1L), 1L)
+  expect_identical(foo_maybe_required(NULL), NULL)
+  expect_error(foo_maybe_required(), class = "typewriter_error_typed_arg_missing")
+  expect_error(foo_maybe_required("A"), class = "invalid_input")
+})
+
+test_that("Modifiers can't be used in incorrect context.", {
+  expect_error(untyped(), class = "typewriter_error_invalid_context")
+})
+
+# class ------------------------------------------------------------------------
+
+test_that("`untype_function()` works as expected.", {
+  foo_untyped <- function(x) { x }
+  foo_typed <- typed(function(x = check_integer()) { x })
+
+  expect_identical(untype_function(foo_untyped), foo_untyped)
+  expect_identical(untype_function(foo_typed), foo_untyped)
+
+  expect_error(untype_function(10), class = "typewriter_error_invalid_input")
+})
+
+test_that("`print.typewriter_typed_function()` works as expected.", {
+  # `env = baseenv()` stops the snaps from printing a new {testthat} environment
+  # on each run (note that these functions can't actually run in `baseenv()`).
+  foo <- typed(function(x = check_integer()) { x }, env = baseenv())
+  bar <- typed(function(
+    a,
+    x = required(check_integer()),
+    y = chk::chk_atomic(),
+    ... = chk::chk_character()
+  ) {
+    TRUE
+  }, env = baseenv())
+
+  expect_snapshot(print(foo))
+  expect_snapshot(print(bar))
+})
+
+test_that("`has_typed_args()` works as expected.", {
+  foo <- function(x) { x }
+  bar <- typed(function(x) { x })
+  baz <- typed(function(x = check_integer()) { x })
+
+  expect_false(has_typed_args(foo))
+  expect_false(has_typed_args(bar))
+  expect_true(has_typed_args(baz))
+
+  expect_error(has_typed_args(10), class = "typewriter_error_invalid_input")
 })
