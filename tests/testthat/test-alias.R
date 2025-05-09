@@ -1,25 +1,26 @@
-# todos ------------------------------------------------------------------------
-
-# TODO: Test `name` and `desc` once incorporated.
-
-# TODO: Check the use of external package checks using:
-# - rlang::rlang::arg_match
-# - rlang::check_required
-#
-# We could also add {chk} to Suggests..., might be worth it for documentation
-# sake. Look back at how {friendlynumber} used Suggested package {bignum} in
-# tests, examples, and documentation.
-
 # tests ------------------------------------------------------------------------
 
-test_that("`type_alias()` works", {
+test_that("`type_alias()` works.", {
   a_int <- type_alias(check_integer())
   a_scalar_int <- type_alias(check_integer(len = 1L))
 
+
   expect_error(a_int("A"), class = "invalid_input")
   expect_error(a_scalar_int(1:2), class = "invalid_input")
+
   expect_identical(a_int(1:5), 1:5)
   expect_identical(a_scalar_int(0L), 0L)
+})
+
+test_that("`type_alias()` works with external package functions.", {
+  a_num <- type_alias(chk::chk_numeric())
+  a_lgl <- type_alias(chk::check_values(values = logical()))
+
+  expect_error(a_num(data.frame()))
+  expect_error(a_lgl(mean))
+
+  expect_identical(a_num(0.5), 0.5)
+  expect_identical(a_lgl(c(TRUE, FALSE, NA)), c(TRUE, FALSE, NA))
 })
 
 test_that("A generated alias expects exactly one unnamed argument.", {
@@ -69,11 +70,16 @@ test_that("`type_alias()` errors on invalid inputs.", {
   expect_error(type_alias(check_integer(), name = 10L), class = "typewriter_error_invalid_input")
   expect_error(type_alias(check_integer(), desc = c("A", "B")), class = "typewriter_error_invalid_input")
   expect_error(type_alias(check_integer(), bullets = 10L), class = "typewriter_error_invalid_input")
+
+  # Functions of type "builtin" and "special" aren't allowed
+  expect_error(type_alias(`$`()), class = "typewriter_error_invalid_input")
+  expect_error(type_alias(sum()), class = "typewriter_error_invalid_input")
 })
 
 test_that("`type_alias()` prints nicely.", {
   skip_on_cran()
 
+  a_num <- type_alias(chk::chk_numeric())
   a_int <- type_alias(
     call = check_integer(),
     name = "integer",
@@ -90,6 +96,7 @@ test_that("`type_alias()` prints nicely.", {
       ">" = ">"
     )
   )
+  expect_snapshot(print(a_num))
   expect_snapshot(print(a_int))
 })
 

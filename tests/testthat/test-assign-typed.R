@@ -1,14 +1,3 @@
-# todos ------------------------------------------------------------------------
-
-# TODO: Check the use of external package checks using:
-# - rlang::rlang::arg_match
-# - rlang::check_required
-#
-# We could also add {chk} to Suggests..., might be worth it for documentation
-# sake. Look back at how {friendlynumber} used Suggested package {bignum} in
-# tests, examples, and documentation.
-
-# tests ------------------------------------------------------------------------
 test_that("`%<~%` works for typed object assignment.", {
   # Should be able to assign a call (with/without initialization value) or alias
   int1 %<~% check_integer()
@@ -111,6 +100,26 @@ test_that("`%<~%` works for typed function assignment.", {
     regexp = "Invalid object ..2",
     fixed = TRUE
   )
+})
+
+test_that("`%<~%` works with external package checks.", {
+  int1 %<~% chk::chk_integer()
+  int2 %<~% chk::check_values(values = integer())
+  int3 %<~% chk::chk_integer(1:4)
+
+  expect_true(is_uninitialized(int1))
+  expect_true(is_uninitialized(int2))
+  expect_false(is_uninitialized(int3))
+
+  expect_identical(int3, 1:4)
+
+  expect_error(int1 <- "A", class = "typewriter_error_invalid_assignment")
+  expect_error(int2 <- 0.5, class = "typewriter_error_invalid_assignment")
+  expect_error(int3 <- TRUE, class = "typewriter_error_invalid_assignment")
+
+  expect_no_error(int1 <- 10L)
+  expect_no_error(int2 <- 1:5)
+  expect_no_error(int3 <- NA_integer_)
 })
 
 test_that("`%<~%` errors on invalid inputs.", {
