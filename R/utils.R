@@ -29,3 +29,19 @@ expr_type <- function(expr) {
     typeof(expr)
   }
 }
+
+cat_bullets <- function(bullets) {
+  if (is_empty(bullets)) {
+    return(invisible())
+  } else if (rlang::is_installed("cli")) {
+    writeLines(cli::format_bullets_raw(bullets))
+  } else {
+    # {cli} interprets names in `cli_marks` as bullet marks and ignores all
+    # other names, so we do the same here to match.
+    cli_marks <- c(" ", "i", "x", "v", "!", "*", ">")
+    bullet_names <- rlang::names2(bullets)
+    cli_bullet <- bullet_names %in% cli_marks
+    bullets[cli_bullet] <- paste(bullet_names[cli_bullet], bullets[cli_bullet])
+    writeLines(bullets)
+  }
+}
