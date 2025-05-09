@@ -1,12 +1,4 @@
-# todos ------------------------------------------------------------------------
-
-# TODO: What do we do with the alias when the first argument is unnamed?
-# - This is normally the initialization value, but not in our context
-# - I feel like we should throw an error, since we're expecting the same
-#   kind of function as in `%<~%`, in which the first argument should be
-#   an initialization value...
-
-# functions --------------------------------------------------------------------
+# aliasing ---------------------------------------------------------------------
 
 #' @export
 type_alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
@@ -77,19 +69,14 @@ type_alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
   }
   fun_call <- rlang::call_modify(rlang::call2(call_fun_sym), ... = , !!!args)
 
+  # As with {purrr} <partialised> functions, an alias needs to receive arguments
+  # via `...` to support NSE check functions that use `substitute()` on their
+  # arguments (e.g. via `rlang::caller_arg()`). We ensure that `...` contains
+  # only one unnamed argument using `check_type_alias_dots()`. This dot is then
+  # forwarded to the first argument of the type check `call`.
   body <- rlang::expr({
-    if (...length() != 1) {
-      typewriter::stop_type_alias_invalid_input(c(
-        "Must supply exactly one argument to `...`.",
-        x = sprintf("Supplied %i arguments to `...`.", ...length())
-      ))
-    }
-    if (!is.null(...names())) {
-      typewriter::stop_type_alias_invalid_input(c(
-        "Arguments to `...` must be unnamed.",
-        x = sprintf("Argument `..1` is named %s.", encodeString(...names(), quote = '"'))
-      ))
-    }
+    # `sym("...")` prevents package note "... may be used in an incorrect context"
+    typewriter::check_type_alias_dots(!!rlang::sym("..."))
     !!call_fun_sym <- !!fun
     !!fun_call
     ...elt(1L)
@@ -111,33 +98,6 @@ type_alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
 
 utils::globalVariables("!<-")
 
-#' @export
-is_type_alias <- function(x) {
-  inherits(x, "typewriter_type_alias")
-}
-
-#' @export
-print.typewriter_type_alias <- function(x, ...) {
-  cat(sprintf("<alias<%s>>\n", attr(x, "name")))
-  cat(paste0(attr(x, "desc"), "\n"))
-  cat_type_alias_bullets(x)
-}
-
-cat_type_alias_bullets <- function(x) { # nocov start
-  bullets <- attr(x, "bullets")
-  if (rlang::is_installed("cli")) {
-    writeLines(cli::cli_fmt(cli::cli_bullets(bullets)))
-  } else {
-    # {cli} interprets names in `cli_marks` as bullet marks and ignores all
-    # other names, so we do the same here to match.
-    cli_marks <- c(" ", "i", "x", "v", "!", "*", ">")
-    bullet_names <- rlang::names2(bullets)
-    cli_bullet <- bullet_names %in% cli_marks
-    bullets[cli_bullet] <- paste(bullet_names[cli_bullet], bullets[cli_bullet])
-    writeLines(bullets)
-  }
-} # nocov end
-
 new_type_alias <- function(fun, name, desc, bullets) {
   structure(
     fun,
@@ -148,41 +108,57 @@ new_type_alias <- function(fun, name, desc, bullets) {
   )
 }
 
+#' @export
+is_type_alias <- function(x) {
+  inherits(x, "typewriter_type_alias")
+}
+
+#' @export
+format.typewriter_type_alias <- function(x, ...) {
+  sprintf("<alias<%s>>", attr(x, "name"))
+}
+
+#' @export
+print.typewriter_type_alias <- function(x, ...) {
+  cat(format(x), "\n")
+  cat(attr(x, "desc"), "\n")
+  cat_bullets(attr(x, "bullets"))
+}
+
 # helpers ----------------------------------------------------------------------
 
-# NOTE: Allows `check_integer(error_call = rlang::caller_env())` to get the
+# Allows `check_integer(error_call = rlang::caller_env())` to get the
 # correct env when the check is wrapped in an alias.
 #' @export
 alias_caller <- function() {
   quote(parent.frame(1L))
 }
 
-# Reminder: `alias_caller()` works because the evaluation of a default argument
-# is different from that of a supplied argument. Supplied argument promises
-# reference the environment of the caller, which a default argument is evaluated
-# within the function.
-if (FALSE) {
-  test_eval <- function(call = parent.frame(1L)) {
-    print(call)
-    print(parent.frame(1L))
-  }
-  foo_1 <- function() test_eval()
-  foo_2 <- function() test_eval(call = parent.frame(1L))
-
-  foo_1() # Default `call = parent.frame(1L)` evaluated within it's function `test_eval()`
-  foo_2() # Default `call = parent.frame(1L)` evaluated within it's caller `foo_2()`
-}
-
 # dependencies -----------------------------------------------------------------
 
-# These are functions used within a generated `type_alias()` and are not meant for
-# external use.
+# These are functions used within a generated `type_alias()` and are not meant
+# for external use.
 
 #' @export
-stop_type_alias_invalid_input <- function(message) {
-  typewriter_abort(
-    message = message,
-    call = rlang::caller_env(),
-    class = "typewriter_error_type_alias_invalid_input"
-  )
+check_type_alias_dots <- function(...) {
+  if (...length() != 1) {
+    typewriter_abort(
+      message = c(
+        "Must supply exactly one argument to `...`.",
+        x = sprintf("Supplied %i arguments to `...`.", ...length())
+      ),
+      call = rlang::caller_env(),
+      class = "typewriter_error_type_alias_invalid_input"
+    )
+  }
+  if (!is.null(...names())) {
+    typewriter_abort(
+      message = c(
+        "Arguments to `...` must be unnamed.",
+        x = sprintf("Argument `..1` is named %s.", encodeString(...names(), quote = '"'))
+      ),
+      call = rlang::caller_env(),
+      class = "typewriter_error_type_alias_invalid_input"
+    )
+  }
 }
