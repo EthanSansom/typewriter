@@ -1,4 +1,4 @@
-# `alias()` prints nicely.
+# `type_alias()` prints nicely.
 
     Code
       print(a_int)

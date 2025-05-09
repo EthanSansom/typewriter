@@ -11,9 +11,10 @@
 # tests, examples, and documentation.
 
 # tests ------------------------------------------------------------------------
-test_that("`alias()` works", {
-  a_int <- alias(check_integer())
-  a_scalar_int <- alias(check_integer(len = 1L))
+
+test_that("`type_alias()` works", {
+  a_int <- type_alias(check_integer())
+  a_scalar_int <- type_alias(check_integer(len = 1L))
 
   expect_error(a_int("A"), class = "invalid_input")
   expect_error(a_scalar_int(1:2), class = "invalid_input")
@@ -21,9 +22,18 @@ test_that("`alias()` works", {
   expect_identical(a_scalar_int(0L), 0L)
 })
 
-test_that("`alias()` works with `%<-%` and `assign_typed()`", {
-  a_int <- alias(check_integer())
-  a_scalar_int <- alias(check_integer(len = 1L))
+test_that("A generated alias expects exactly one unnamed argument.", {
+  a_int <- type_alias(check_integer())
+
+  expect_error(a_int(x = 10L), class = "typewriter_error_type_alias_invalid_input")
+  expect_error(a_int(10L, x = 10L, y = 10L), class = "typewriter_error_type_alias_invalid_input")
+  expect_error(a_int(10L, 10L), class = "typewriter_error_type_alias_invalid_input")
+  expect_error(a_int(), class = "typewriter_error_type_alias_invalid_input")
+})
+
+test_that("`type_alias()` works with `%<-%` and `assign_typed()`", {
+  a_int <- type_alias(check_integer())
+  a_scalar_int <- type_alias(check_integer(len = 1L))
 
   int %<~% a_int
   scalar_int %<~% a_scalar_int
@@ -49,17 +59,22 @@ test_that("`alias()` works with `%<-%` and `assign_typed()`", {
   expect_identical(env$scalar_int2 <- 10L, 10L)
 })
 
-test_that("`alias()` errors on invalid inputs.", {
-  expect_error(alias(10), class = "typewriter_error_invalid_input")
-  expect_error(alias(check_integer), class = "typewriter_error_invalid_input")
-  expect_error(alias(check_integer(len = stop())), class = "typewriter_error_invalid_input")
-  expect_error(alias(non_extant_function()), class = "typewriter_error_invalid_input")
+test_that("`type_alias()` errors on invalid inputs.", {
+  expect_error(type_alias(10), class = "typewriter_error_invalid_input")
+  expect_error(type_alias(check_integer), class = "typewriter_error_invalid_input")
+  expect_error(type_alias(check_integer(len = stop("No"))), class = "typewriter_error_invalid_input")
+  expect_error(type_alias(check_integer(stop("No"))), class = "typewriter_error_invalid_input")
+  expect_error(type_alias(non_extant_function()), class = "typewriter_error_invalid_input")
+
+  expect_error(type_alias(check_integer(), name = 10L), class = "typewriter_error_invalid_input")
+  expect_error(type_alias(check_integer(), desc = c("A", "B")), class = "typewriter_error_invalid_input")
+  expect_error(type_alias(check_integer(), bullets = 10L), class = "typewriter_error_invalid_input")
 })
 
-test_that("`alias()` prints nicely.", {
+test_that("`type_alias()` prints nicely.", {
   skip_on_cran()
 
-  a_int <- alias(
+  a_int <- type_alias(
     call = check_integer(),
     name = "integer",
     desc = "An integer vector.",
@@ -76,4 +91,32 @@ test_that("`alias()` prints nicely.", {
     )
   )
   expect_snapshot(print(a_int))
+})
+
+test_that("`alias_caller()` makes `rlang::abort()` reference the correct call.", {
+  check_is_logical <- function(x, x_name = rlang::caller_arg(x), call = rlang::caller_env()) {
+    if (is.logical(x)) {
+      return(x)
+    }
+    rlang::abort(
+      sprintf("`%s` must be logical.", x_name),
+      class = "invalid_input",
+      call = call
+    )
+  }
+
+  a_lgl_1 <- type_alias(check_is_logical())
+  a_lgl_2 <- type_alias(check_is_logical(call = alias_caller()))
+
+  foo_1 <- typed(function(arg = a_lgl_1) { TRUE })
+  foo_2 <- typed(function(arg = a_lgl_2) { TRUE })
+
+  # `a_lgl_2()` should correctly reference it's caller (`foo_2()`), while
+  # `a_lgl_1()` will reference itself.
+  expect_identical(rlang::catch_cnd(foo_1("A"))$call, quote(a_lgl_1(arg)))
+  expect_identical(rlang::catch_cnd(foo_2("A"))$call, quote(foo_2("A")))
+
+  # Error messages should be fine either way
+  expect_error(foo_1("A"), class = "invalid_input", regexp = "`arg` must be logical.", fixed = TRUE)
+  expect_error(foo_2("A"), class = "invalid_input", regexp = "`arg` must be logical.", fixed = TRUE)
 })
