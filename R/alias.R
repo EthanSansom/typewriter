@@ -16,6 +16,10 @@
 #' @export
 alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
   call <- check_is_simple_call(x = rlang::enexpr(call), x_name = "call")
+  check_is_string(name, null_ok = TRUE)
+  check_is_string(desc, null_ok = TRUE)
+  check_is_character(bullets, null_ok = TRUE)
+
   error_call <- rlang::current_env()
   env <- rlang::caller_env()
 
@@ -155,7 +159,23 @@ new_alias <- function(fun, name, desc, bullets) {
 # correct env when the check is wrapped in an alias.
 #' @export
 alias_caller <- function() {
-  quote(parent.frame(1))
+  quote(parent.frame(1L))
+}
+
+# Reminder: `alias_caller()` works because the evaluation of a default argument
+# is different from that of a supplied argument. Supplied argument promises
+# reference the environment of the caller, which a default argument is evaluated
+# within the function.
+if (FALSE) {
+  test_eval <- function(call = parent.frame(1L)) {
+    print(call)
+    print(parent.frame(1L))
+  }
+  foo_1 <- function() test_eval()
+  foo_2 <- function() test_eval(call = parent.frame(1L))
+
+  foo_1() # Default `call = parent.frame(1L)` evaluated within it's function `test_eval()`
+  foo_2() # Default `call = parent.frame(1L)` evaluated within it's caller `foo_2()`
 }
 
 # dependencies -----------------------------------------------------------------
