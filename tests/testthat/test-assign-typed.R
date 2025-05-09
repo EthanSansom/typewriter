@@ -123,21 +123,46 @@ test_that("`%<~%` works with external package checks.", {
 })
 
 test_that("`%<~%` errors on invalid inputs.", {
+  # `sym` must be a symbol
   expect_error("A" %<~% check_integer(), class = "typewriter_error_invalid_input")
-  expect_error(x %<~% 10, class = "typewriter_error_invalid_input")
+  expect_error("A" %<~% check_integer_alias, class = "typewriter_error_invalid_input")
+  expect_error(c(x) %<~% check_integer(), class = "typewriter_error_invalid_input")
+
+  # `call` must be to function of type "closure"
+  checks <- list(check = check_integer)
   expect_error(x %<~% checks[[1]], class = "typewriter_error_invalid_input")
   expect_error(x %<~% checks$check, class = "typewriter_error_invalid_input")
-  expect_error(x %<~% checks$check(), class = "typewriter_error_invalid_input")
+  expect_error(x %<~% sum(), class = "typewriter_error_invalid_input")
 
-  # `call` (RHS) must not raise an error if an initialization value is provided
+  # `call` must be a simple call
+  expect_error(x %<~% checks$check(), class = "typewriter_error_invalid_input")
+  expect_error(x %<~% check_integer, class = "typewriter_error_invalid_input")
+  expect_error(x %<~% 10, class = "typewriter_error_invalid_input")
+  expect_error(x %<~% chk::chk_integer, class = "typewriter_error_invalid_input")
+
+  # `call` must exist
+  expect_error(x %<~% non_extant_symbol, class = "typewriter_error_invalid_input")
+  expect_error(x %<~% non_extant_call(), class = "typewriter_error_invalid_input")
+
+  # `call` is evaluated if an initialization value is provided
   expect_error(x %<~% check_integer("A"), class = "typewriter_error_invalid_assignment")
   expect_error(x %<~% check_integer(1L, len = 2L), class = "typewriter_error_invalid_assignment")
 
-  # `call` (RHS) arguments must all be evaluable
+  # `call` arguments must all be evaluable
   expect_error(x %<~% check_integer(stop()), class = "typewriter_error_invalid_input")
   expect_error(x %<~% check_integer(stop(), len = 1L), class = "typewriter_error_invalid_input")
   expect_error(x %<~% check_integer(len = stop()), class = "typewriter_error_invalid_input")
   expect_error(x %<~% check_integer(1L, len = stop()), class = "typewriter_error_invalid_input")
+
+  # Invalid function typing throws an error from `typed()`
+  expect_error(
+    foo %<~% function(x = typewriter::optional()) { TRUE },
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    foo %<~% function(x = optional(required(check_integer()))) { TRUE },
+    class = "typewriter_error_invalid_input"
+  )
 })
 
 test_that("`%<~%` errors when `call` doesn't exist in `env`", {
