@@ -114,13 +114,8 @@ check_is_evaluable <- function(
     message = NULL,
     call = rlang::caller_env()
 ) {
-  if (rlang::is_quosure(x)) {
-    env <- rlang::quo_get_env(x)
-    x <- rlang::quo_get_expr(x)
-  }
-
   rlang::try_fetch(
-    eval(x, envir = env),
+    rlang::eval_tidy(x, env = env),
     error = function(cnd) {
       typewriter_abort_invalid_input(
         message = message %||% sprintf("Can't evaluate object `%s`.", x_name),
@@ -131,7 +126,7 @@ check_is_evaluable <- function(
   )
 }
 
-assert_dots_named <- function(..., message = NULL, call = rlang::caller_env()) {
+assert_dots_named <- function(..., .message = NULL, .call = rlang::caller_env()) {
 
   named_dots_at <- rlang::have_name(rlang::enexprs(...))
   if (all(named_dots_at)) {
@@ -147,14 +142,14 @@ assert_dots_named <- function(..., message = NULL, call = rlang::caller_env()) {
   }
 
   typewriter_abort_invalid_input(
-    message = c(
+    message = .message %||% c(
       "Arguments supplied to `...` must be named.",
       x = sprintf(
         "Argument%s `%s` %s unnanmed.",
         ngettext(n_unnamed_dots, "", "s"), unnamed_dots, ngettext(n_unnamed_dots, "is", "are")
       )
     ),
-    call = call
+    call = .call
   )
 }
 
