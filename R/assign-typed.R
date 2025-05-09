@@ -83,6 +83,14 @@ utils::globalVariables(":=")
     call_fun <- maybe_alias
     call_fun_sym <- call
     call <- rlang::call2(call)
+  } else if (!rlang::is_call(call)) {
+    typewriter_abort_invalid_input(
+      sprintf(
+        "`call` must be an <alias> or a simple call, not %s.",
+        obj_type_friendly(call)
+      ),
+      call = error_call
+    )
   } else {
     check_is_simple_call(
       x = call,
