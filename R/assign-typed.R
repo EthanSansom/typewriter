@@ -1,14 +1,4 @@
-# todos ------------------------------------------------------------------------
-
-# TODO: Check if you're using any newer {rlang} functions (maybe `rlang::try_fetch()`)
-#       and up the version number if so (or use `withCallingHandlers`).
-
-# TODO: `check_is_environment()` for all uses of `env`
-
 # assignment -------------------------------------------------------------------
-
-# TODO: Once `typed_function()` exists, update this to dispatch differently when
-#       the RHS is a call to `function`.
 
 #' @export
 `%<~%` <- function(sym, call) {
@@ -185,9 +175,19 @@ utils::globalVariables(":=")
       }
     )
   } else {
-    # TODO: We'll want to provide information about the call to the `new_uninitialized`
-    #       so that it can reference the type using either alias info or quoting the call
-    VALUE <- new_uninitialized()
+    if (is_type_alias(call_fun)) {
+      VALUE <- new_uninitialized(
+        name = attr(call_fun, "name"),
+        desc = attr(call_fun, "desc"),
+        bullets = attr(call_fun, "bullets")
+      )
+    } else {
+      VALUE <- new_uninitialized(
+        name = rlang::as_label(call_fun_sym),
+        desc = sprintf("An object checked using `%s`.", rlang::as_label(call)),
+        bullets = NULL
+      )
+    }
   }
 
   # We in-line the definition of `call_fun` into the active binding function
@@ -211,19 +211,13 @@ utils::globalVariables(":=")
     # In-lined definition of the function called in `call`
     !!call_fun_sym <- !!call_fun
 
-    # Attempt to call the in-lined version of `call`, with `sym` as it's first argument
-    rlang::try_fetch(
+    # Attempt to call the in-lined version of `call` (i.e. `new_call`)
+    typewriter::check_typed_assignment(
       expr = !!new_call,
-      error = function(cnd) {
-        # TODO: Maybe `typewriter_abort()`? Does this matter
-        rlang::abort(
-          message = sprintf("Attempted to assign an invalid value to typed object `%s`.", !!sym_name),
-          class = c("typewriter_error", "typewriter_error_invalid_assignment"),
-          call = !!env,
-          parent = cnd
-        )
-      }
+      name = !!sym_name,
+      error_call = !!env
     )
+
     # Since we passed the check above, update the value of the typed object which
     # we store in the parent environment of this function.
     VALUE <<- !!sym
@@ -254,4 +248,24 @@ env_desc <- function(env) {
 
 is_named_symbol <- function(x) {
   is.symbol(x) || rlang::is_call(x, c("::", ":::"))
+}
+
+# dependencies -----------------------------------------------------------------
+
+# These are not functions intended for external use, but are functions which are
+# used within the active binding function of a typed object.
+
+#' @export
+check_typed_assignment <- function(expr, name, error_call) {
+  rlang::try_fetch(
+    expr = expr,
+    error = function(cnd) {
+      typewriter_abort(
+        message = sprintf("Attempted to assign an invalid value to typed object `%s`.", name),
+        class = "typewriter_error_invalid_assignment",
+        call = error_call,
+        parent = cnd
+      )
+    }
+  )
 }
