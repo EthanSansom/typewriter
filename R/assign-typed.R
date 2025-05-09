@@ -81,7 +81,7 @@ utils::globalVariables(":=")
       ),
       call = error_call
     )
-    if (!is_alias(maybe_alias)) {
+    if (!is_type_alias(maybe_alias)) {
       typewriter_abort_invalid_input(
         sprintf(
           "`call` must be an <alias> or a simple call, not %s.",

@@ -25,4 +25,4 @@ check_character <- function(x, len = NULL) {
 
 # aliases ----------------------------------------------------------------------
 
-check_integer_alias <- alias(check_integer())
+check_integer_alias <- type_alias(check_integer())

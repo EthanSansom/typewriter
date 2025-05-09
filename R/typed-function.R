@@ -98,7 +98,7 @@ new_typed_function <- function(
   }
 
   is_defused_alias <- function(call) {
-    is_named_symbol(call) && is_alias(try(eval(call, env), silent = TRUE))
+    is_named_symbol(call) && is_type_alias(try(eval(call, env), silent = TRUE))
   }
 
   stop_incompatible_dots_modifier <- function(modifier_name) {
@@ -118,7 +118,7 @@ new_typed_function <- function(
   typed_arg_desc <- function(type_call, arg_modifiers) {
     type_call_fun <- type_call[[1]]
     maybe_alias <- try(eval(type_call_fun, env), silent = TRUE)
-    if (is_alias(maybe_alias)) {
+    if (is_type_alias(maybe_alias)) {
       desc <- attr(maybe_alias, "desc")
     } else {
       desc <- sprintf("An object checked by `%s`.", rlang::as_label(type_call))

@@ -1,20 +1,15 @@
 # todos ------------------------------------------------------------------------
 
-# TODO: Rename `alias` to `type_alias`, since `alias` is a function in {stats}
-
 # TODO: What do we do with the alias when the first argument is unnamed?
 # - This is normally the initialization value, but not in our context
 # - I feel like we should throw an error, since we're expecting the same
 #   kind of function as in `%<~%`, in which the first argument should be
 #   an initialization value...
 
-# TODO: Implement the `bullets` argument of the `alias`, which we'll need for implementing
-#       list_of and other aliases.
-
 # functions --------------------------------------------------------------------
 
 #' @export
-alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
+type_alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
   call <- check_is_simple_call(x = rlang::enexpr(call), x_name = "call")
   check_is_string(name, null_ok = TRUE)
   check_is_string(desc, null_ok = TRUE)
@@ -84,13 +79,13 @@ alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
 
   body <- rlang::expr({
     if (...length() != 1) {
-      typewriter::stop_alias_invalid_input(c(
+      typewriter::stop_type_alias_invalid_input(c(
         "Must supply exactly one argument to `...`.",
         x = sprintf("Supplied %i arguments to `...`.", ...length())
       ))
     }
     if (!is.null(...names())) {
-      typewriter::stop_alias_invalid_input(c(
+      typewriter::stop_type_alias_invalid_input(c(
         "Arguments to `...` must be unnamed.",
         x = sprintf("Argument `..1` is named %s.", encodeString(...names(), quote = '"'))
       ))
@@ -106,7 +101,7 @@ alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
     env = env
   )
 
-  new_alias(
+  new_type_alias(
     fun = out,
     name = name %||% rlang::as_name(call_fun_sym),
     desc = desc %||% sprintf("An object checked using `%s`.", rlang::as_label(call)),
@@ -117,18 +112,18 @@ alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
 utils::globalVariables("!<-")
 
 #' @export
-is_alias <- function(x) {
-  inherits(x, "typewriter_alias")
+is_type_alias <- function(x) {
+  inherits(x, "typewriter_type_alias")
 }
 
 #' @export
-print.typewriter_alias <- function(x, ...) {
+print.typewriter_type_alias <- function(x, ...) {
   cat(sprintf("<alias<%s>>\n", attr(x, "name")))
   cat(paste0(attr(x, "desc"), "\n"))
-  cat_alias_bullets(x)
+  cat_type_alias_bullets(x)
 }
 
-cat_alias_bullets <- function(x) {
+cat_type_alias_bullets <- function(x) { # nocov start
   bullets <- attr(x, "bullets")
   if (rlang::is_installed("cli")) {
     writeLines(cli::cli_fmt(cli::cli_bullets(bullets)))
@@ -141,12 +136,12 @@ cat_alias_bullets <- function(x) {
     bullets[cli_bullet] <- paste(bullet_names[cli_bullet], bullets[cli_bullet])
     writeLines(bullets)
   }
-}
+} # nocov end
 
-new_alias <- function(fun, name, desc, bullets) {
+new_type_alias <- function(fun, name, desc, bullets) {
   structure(
     fun,
-    class = c("typewriter_alias", "function"),
+    class = c("typewriter_type_alias", "function"),
     name = name,
     desc = desc,
     bullets = bullets
@@ -180,14 +175,14 @@ if (FALSE) {
 
 # dependencies -----------------------------------------------------------------
 
-# These are functions used within a generated `alias()` and are not meant for
+# These are functions used within a generated `type_alias()` and are not meant for
 # external use.
 
 #' @export
-stop_alias_invalid_input <- function(message) {
+stop_type_alias_invalid_input <- function(message) {
   typewriter_abort(
     message = message,
     call = rlang::caller_env(),
-    class = "typewriter_error_alias_invalid_input"
+    class = "typewriter_error_type_alias_invalid_input"
   )
 }

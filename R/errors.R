@@ -1,7 +1,3 @@
-# todos ------------------------------------------------------------------------
-
-# TODO: Check is string and check is character for `alias(name, desc, bullets)`
-
 # check ------------------------------------------------------------------------
 
 check_is_character <- function(
