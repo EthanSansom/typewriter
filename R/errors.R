@@ -4,6 +4,46 @@
 
 # check ------------------------------------------------------------------------
 
+check_is_character <- function(
+    x,
+    null_ok = FALSE,
+    x_name = rlang::caller_arg(x),
+    call = rlang::caller_env()
+) {
+  if ((null_ok && is.null(x)) || is.character(x)) {
+    return(x)
+  }
+  typewriter_abort_invalid_input(
+    sprintf("`%s` must be a character, not %s.", x_name, obj_type_friendly(x)),
+    call = call
+  )
+}
+
+check_is_string <- function(
+    x,
+    null_ok = FALSE,
+    x_name = rlang::caller_arg(x),
+    call = rlang::caller_env()
+) {
+  if ((null_ok && is.null(x)) || rlang::is_string(x)) {
+    return(x)
+  }
+  if (!is.character(x)) {
+    typewriter_abort_invalid_input(
+      sprintf("`%s` must be a string, not %s.", x_name, obj_type_friendly(x)),
+      call = call
+    )
+  }
+  what <- if (length(x) == 1L) "character `NA`" else sprintf("length %i character", length(x))
+  typewriter_abort_invalid_input(
+    c(
+      sprintf("`%s` must be a string.", x_name),
+      x = sprintf("`%s` is a %s.", x_name, what)
+    ),
+    call = call
+  )
+}
+
 check_is_symbol <- function(
     x,
     x_name = rlang::caller_arg(x),
@@ -28,6 +68,21 @@ check_is_environment <- function(
   }
   typewriter_abort_invalid_input(
     sprintf("`%s` must be an environment, not %s.", x_name, obj_type_friendly(x)),
+    call = call
+  )
+}
+
+check_is_function <- function(
+    x,
+    x_name = rlang::caller_arg(x),
+    message = NULL,
+    call = rlang::caller_env()
+) {
+  if (is.function(x)) {
+    return(x)
+  }
+  typewriter_abort_invalid_input(
+    message = message %||% sprintf("`%s` must be a function, not %s.", x_name, obj_type_friendly(x)),
     call = call
   )
 }
@@ -77,21 +132,6 @@ check_is_evaluable <- function(
         parent = cnd
       )
     }
-  )
-}
-
-check_is_function <- function(
-    x,
-    x_name = rlang::caller_arg(x),
-    message = NULL,
-    call = rlang::caller_env()
-) {
-  if (is.function(x)) {
-    return(x)
-  }
-  typewriter_abort_invalid_input(
-    message = message %||% sprintf("`%s` must be a function, not %s.", x_name, obj_type_friendly(x)),
-    call = call
   )
 }
 
