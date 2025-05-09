@@ -534,7 +534,7 @@ rethrow_parent_assignment_error <- function(expr) {
 }
 
 #' @export
-check_required_arg <- function(x) { # nocov start
+check_required_arg <- function(x) {
   if (!missing(x)) {
     return(invisible(TRUE))
   }
@@ -543,4 +543,4 @@ check_required_arg <- function(x) { # nocov start
     call = rlang::caller_env(),
     class = "typewriter_error_typed_arg_missing"
   )
-} # nocov end
+}
