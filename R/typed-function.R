@@ -437,7 +437,7 @@ print.typewriter_typed_function <- function(x, ...) {
   cat_typed_args(x)
 }
 
-cat_typed_args <- function(x) {
+cat_typed_args <- function(x) { # nocov start
   if (!has_typed_args(x)) {
     return(invisible(NULL))
   }
@@ -458,7 +458,7 @@ cat_typed_args <- function(x) {
     bullets <- sprintf("%s: %s", pad_names(arg_names), attr(x, "typed_args_descs"))
     writeLines(paste("*", bullets))
   }
-}
+} # nocov end
 
 # modifiers --------------------------------------------------------------------
 
