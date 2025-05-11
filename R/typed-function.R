@@ -1,5 +1,117 @@
 # function typing --------------------------------------------------------------
 
+#' Declare a function with typed arguments
+#'
+#' @description
+#'
+#' `typed()` modifies a function declaration (e.g. `function(x) { x + x }`) by
+#' inserting additional calls into the function body to check the types of its
+#' arguments.
+#'
+#' To declare the type of an argument in `function`, set it's default value to a
+#' type-checking call. For instance, [chk::chk_integer()] raises an error if its
+#' first argument is not an integer. Using this, we can declare that the argument
+#' `x` must be an integer like so:
+#'
+#' ```r
+#' integer_doubler <- typed(function(x = chk::chk_integer()) {
+#'  x + x
+#' })
+#' ```
+#'
+#' This returns a function which looks like `function(x) { x + x }` and which
+#' calls `chk::chk_integer(x)` prior to executing its body.
+#'
+#' Default argument values are taken from the first argument of the type-checking
+#' call. For instance, the following:
+#'
+#' ```r
+#' integer_doubler_2 <- typed(function(x = chk::chk_integer(0L)) {
+#'  x + x
+#' })
+#' ```
+#'
+#' Returns a function like `function(x = 0L) { x + x }` and which still calls
+#' `chk::chk_integer(x)` prior to executing its body.
+#'
+#' @details
+#'
+#' `typed()` works by inserting code into the body of a function. This is in
+#' contrast to [type_alias()] and [assign_typed()], both of which create wrappers
+#' around type-checking functions. Consider the following example:
+#'
+#' ```r
+#' integer_doubler <- typed(function(x = chk_integer()) {
+#'  x + x
+#' })
+#' ```
+#'
+#' This is roughly equivalent to the following:
+#'
+#' ```r
+#' integer_doubler <- function(x) {
+#'  chk_integer(x)
+#'  x + x
+#' }
+#' ```
+#'
+#' In both cases, what `integer_doubler()` does will change if the function
+#' `chk_integer()` is overwritten in the environment of `integer_doubler()`. In
+#' the worst case scenario, this breaks our contract that the argument `x` is
+#' going to be an integer. To prevent such changes, type-checking calls should
+#' be namespaced:
+#'
+#' ```r
+#' integer_doubler_stable <- typed(function(x = chk::chk_integer()) {
+#'  x + x
+#' })
+#' ```
+#'
+#' @param call `[call]`
+#'
+#' A call to `function`.
+#'
+#' @param env `[environment]`
+#'
+#' The environment of the returned function, passed to [rlang::new_function()].
+#' By default `env` is the caller's environment.
+#'
+#' @return
+#'
+#' A typed function.
+#'
+#' @seealso [as_typed_function()], [is_typed_function()], [untype_function()],
+#' [has_typed_args()]
+#'
+#' @examplesIf requireNamespace("chk", quietly = TRUE)
+#' # Declare the types of arguments
+#' add <- typed(function(x = chk::chk_numeric(), y = chk::chk_numeric()) {
+#'   x + y
+#' })
+#' add(5, 6)
+#' try(add("A", 10))
+#'
+#' # Printing the function shows the types of it's arguments
+#' print(add)
+#'
+#' # Typed arguments can be declared using type aliases
+#' a_num <- type_alias(chk::chk_numeric(), desc = "A numeric vector.")
+#' add2 <- typed(function(x = a_num, y = a_num) {
+#'   x + y
+#' })
+#' add2(10.5, 0.1)
+#' try(add2(5, TRUE))
+#'
+#' # Arguments use the alias's description if available
+#' print(add2)
+#'
+#' # Dots can be typed as well
+#' sum2 <- typed(function(... = a_num, na.rm = chk::chk_flag(FALSE)) {
+#'   sum(..., na.rm = na.rm)
+#' })
+#' sum2(1, 2, 3, 4)
+#' try(sum2(1, 2, "C"))
+#' try(sum2(1, 2, 3, na.rm = "no"))
 #' @export
 typed <- function(call, env = rlang::caller_env()) {
   check_is_environment(env)
@@ -25,7 +137,56 @@ typed <- function(call, env = rlang::caller_env()) {
   )
 }
 
-# TODO: This needs work and testing!
+
+#' Type the arguments of an existing function
+#'
+#' @param .fun `[function]`
+#'
+#' A function whose arguments will be typed. If `.fun` is already a typed
+#' function, it's previous argument types will be overwritten.
+#'
+#' @param ... `[call / alias]`
+#'
+#' Type declarations of arguments in `.fun`. Each dot must be a named call or
+#' type alias, the name of which corresponds to an argument in `.fun`.
+#'
+#' For example, we can create a type-strict version of [base::paste0()] like so:
+#'
+#' ```r
+#' my_paste0 <- as_typed_function(
+#'  .fun = base::paste0,
+#'  ... = chk::chk_character(),
+#'  collapse = maybe(chk::chk_string(NULL)),
+#'  recycle0 = chk::chk_flag(FALSE)
+#' )
+#' ```
+#'
+#' `my_paste0(..., collapse, recycle0)` checks for the following types:
+#' * Each dot `..i` must be a character vector.
+#' * `collapse` is either `NULL` (via [maybe]) or a string (default is `NULL`)
+#' * `recycle0` is either `TRUE` or `FALSE` (default is `FALSE`).
+#'
+#' If these checks pass, then the result of `base::paste0(..., collapse, recycle0)`
+#' is returned.
+#'
+#' @returns
+#'
+#' A typed function.
+#'
+#' @seealso [typed()]
+#'
+#' @examplesIf requireNamespace("chk", quietly = TRUE)
+#' my_paste0 <- as_typed_function(
+#'  .fun = base::paste0,
+#'  ... = chk::chk_character(),
+#'  collapse = maybe(chk::chk_string(NULL)),
+#'  recycle0 = chk::chk_flag(FALSE)
+#' )
+#' my_paste0("A", "B", "C")
+#' try(my_paste0("A", "B", collapse = 10))
+#'
+#' # Typed functions `print()` their typed arguments
+#' print(my_paste0)
 #' @export
 as_typed_function <- function(.fun, ...) {
   check_is_function(.fun)
@@ -33,6 +194,8 @@ as_typed_function <- function(.fun, ...) {
   if (is_typed_function(.fun)) {
     .fun <- untype_function(.fun)
   }
+
+  # TODO: `.fun` can't be a primitive or special function, must be a closure
 
   body <- rlang::fn_body(.fun)
   args <- map(rlang::fn_fmls(.fun), \(fml) rlang::call2(quote(typewriter::untyped), fml))
@@ -259,7 +422,9 @@ new_typed_function <- function(
       } else if (n_args == 0) {
         new_args[[i]] <- rlang::missing_arg()
       } else {
-        new_args[[i]] <-  maybe_type_call[[2]]
+        # RHS `value` might be `NULL`, so can't assign via `new_args[[i]] <- value`
+        # as this would just remove the ith argument of `new_args`.
+        new_args[i] <-  list(maybe_type_call[[2]])
       }
       # Argument is untyped, there's nothing left to do
       next
@@ -288,8 +453,10 @@ new_typed_function <- function(
         )
       }
       # Converts `function(arg = call(<value>, ...))` to `function(arg = <value>)`
-      # and we insert `call(arg, ...)` into the function body as a check.
-      new_args[[i]] <- call_args[[1]]
+      # and we insert `call(arg, ...)` into the function body as a check. <value>
+      # might be `NULL`, so we can't insert using `new_args[[i]] <- <value>`, as
+      # this would just remove the ith element of `new_args`.
+      new_args[i] <- list(call_args[[1]])
       type_call <- call_prepend_args(maybe_type_call[-2], !!arg_sym)
     } else {
       # Converts `function(arg = call(...))` to `function(arg)` and we insert
