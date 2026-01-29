@@ -10,7 +10,7 @@ as_typed_function(.fun, ...)
 \item{.fun}{\verb{[function]}
 
 A function whose arguments will be typed. If \code{.fun} is already a typed
-function, it's previous argument types will be overwritten.}
+function, all of it's previous argument types will be overwritten.}
 
 \item{...}{\verb{[call / alias]}
 
@@ -20,17 +20,17 @@ type alias, the name of which corresponds to an argument in \code{.fun}.
 For example, we can create a type-strict version of \code{\link[base:paste]{base::paste0()}} like so:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{my_paste0 <- as_typed_function(
- .fun = base::paste0,
- ... = chk::chk_character(),
- collapse = maybe(chk::chk_string(NULL)),
- recycle0 = chk::chk_flag(FALSE)
+  .fun = base::paste0,
+  ... = chk::chk_character(),
+  collapse = maybe(chk::chk_string(NULL)),
+  recycle0 = chk::chk_flag(FALSE)
 )
 }\if{html}{\out{</div>}}
 
 \code{my_paste0(..., collapse, recycle0)} checks for the following types:
 \itemize{
 \item Each dot \code{..i} must be a character vector.
-\item \code{collapse} is either \code{NULL} (via \link{maybe}) or a string (default is \code{NULL})
+\item \code{collapse} is either \code{NULL} (via \code{\link[=maybe]{maybe()}}) or a string (default is \code{NULL})
 \item \code{recycle0} is either \code{TRUE} or \code{FALSE} (default is \code{FALSE}).
 }
 

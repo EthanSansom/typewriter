@@ -9,20 +9,20 @@ typed(call, env = rlang::caller_env())
 \arguments{
 \item{call}{\verb{[call]}
 
-A call to \code{function}.}
+A call to \code{function} (e.g. a function declaration).}
 
 \item{env}{\verb{[environment]}
 
-The environment of the returned function, passed to \code{\link[rlang:new_function]{rlang::new_function()}}.
-By default \code{env} is the caller's environment.}
+The parent environment of the returned function, passed to \code{\link[rlang:new_function]{rlang::new_function()}}.
+By default \code{env} is the calling environment of \code{typed()}.}
 }
 \value{
 A typed function.
 }
 \description{
 \code{typed()} modifies a function declaration (e.g. \code{function(x) { x + x }}) by
-inserting additional calls into the function body to check the types of its
-arguments.
+inserting additional calls into the function body which check the function's
+argument types.
 
 To declare the type of an argument in \code{function}, set it's default value to a
 type-checking call. For instance, \code{\link[chk:chk_integer]{chk::chk_integer()}} raises an error if its
@@ -30,7 +30,7 @@ first argument is not an integer. Using this, we can declare that the argument
 \code{x} must be an integer like so:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{integer_doubler <- typed(function(x = chk::chk_integer()) \{
- x + x
+  x + x
 \})
 }\if{html}{\out{</div>}}
 
@@ -41,7 +41,7 @@ Default argument values are taken from the first argument of the type-checking
 call. For instance, the following:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{integer_doubler_2 <- typed(function(x = chk::chk_integer(0L)) \{
- x + x
+  x + x
 \})
 }\if{html}{\out{</div>}}
 
@@ -51,31 +51,34 @@ Returns a function like \code{function(x = 0L) { x + x }} and which still calls
 \details{
 \code{typed()} works by inserting code into the body of a function. This is in
 contrast to \code{\link[=type_alias]{type_alias()}} and \code{\link[=assign_typed]{assign_typed()}}, both of which create wrappers
-around type-checking functions. Consider the following example:
+around type-checking functions. Consider this example:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{integer_doubler <- typed(function(x = chk_integer()) \{
- x + x
+  x + x
 \})
 }\if{html}{\out{</div>}}
 
 This is roughly equivalent to the following:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{integer_doubler <- function(x) \{
- chk_integer(x)
- x + x
+  chk_integer(x)
+  x + x
 \}
 }\if{html}{\out{</div>}}
 
 In both cases, what \code{integer_doubler()} does will change if the function
 \code{chk_integer()} is overwritten in the environment of \code{integer_doubler()}. In
-the worst case scenario, this breaks our contract that the argument \code{x} is
+the worst case scenario, this breaks the contract that the argument \code{x} is
 going to be an integer. To prevent such changes, type-checking calls should
 be namespaced:
 
 \if{html}{\out{<div class="sourceCode r">}}\preformatted{integer_doubler_stable <- typed(function(x = chk::chk_integer()) \{
- x + x
+  x + x
 \})
 }\if{html}{\out{</div>}}
+
+Alternatively, you can explicitly define the function's parent environment
+using the \code{env} argument.
 }
 \examples{
 \dontshow{if (requireNamespace("chk", quietly = TRUE)) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
@@ -102,7 +105,7 @@ print(add2)
 
 # Dots can be typed as well
 sum2 <- typed(function(... = a_num, na.rm = chk::chk_flag(FALSE)) {
-  sum(..., na.rm = na.rm)
+  base::sum(..., na.rm = na.rm)
 })
 sum2(1, 2, 3, 4)
 try(sum2(1, 2, "C"))
