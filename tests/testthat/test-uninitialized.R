@@ -1,4 +1,6 @@
 test_that("<uninitialized> objects work as expected.", {
+  skip_if_not_installed("chk")
+
   v %<~% chk::chk_logical()
   w %<~% chk::chk_numeric(x_name = "w")
   x %<~% check_integer()
@@ -14,6 +16,7 @@ test_that("<uninitialized> objects work as expected.", {
 
 test_that("<uninitialized> objects print as expected.", {
   skip_on_cran()
+  skip_if_not_installed("chk")
 
   v %<~% chk::chk_logical()
   w %<~% chk::chk_numeric(x_name = "w")

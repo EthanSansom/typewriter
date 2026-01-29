@@ -4,7 +4,6 @@ test_that("`type_alias()` works.", {
   a_int <- type_alias(check_integer())
   a_scalar_int <- type_alias(check_integer(len = 1L))
 
-
   expect_error(a_int("A"), class = "invalid_input")
   expect_error(a_scalar_int(1:2), class = "invalid_input")
 
@@ -12,7 +11,22 @@ test_that("`type_alias()` works.", {
   expect_identical(a_scalar_int(0L), 0L)
 })
 
+test_that("`return_call` argument works.", {
+  a_fun <- type_alias(check_funish(), return_call = TRUE)
+  a_fun_no_coerce <- type_alias(check_funish(), return_call = FALSE)
+
+  expect_error(a_fun("A"), class = "invalid_input")
+  expect_error(a_fun_no_coerce("A"), class = "invalid_input")
+
+  expect_identical(a_fun(mean), mean)
+  expect_identical(a_fun(~ .x + 10), rlang::as_function(~ .x + 10))
+  expect_identical(a_fun_no_coerce(mean), mean)
+  expect_identical(a_fun_no_coerce(~ .x + 10), ~ .x + 10)
+})
+
 test_that("`type_alias()` works with external package functions.", {
+  skip_if_not_installed("chk")
+
   a_num <- type_alias(chk::chk_numeric())
   a_lgl <- type_alias(chk::check_values(values = logical()))
 
@@ -78,6 +92,7 @@ test_that("`type_alias()` errors on invalid inputs.", {
 
 test_that("`type_alias()` prints nicely.", {
   skip_on_cran()
+  skip_if_not_installed("chk")
 
   a_num <- type_alias(chk::chk_numeric())
   a_int <- type_alias(

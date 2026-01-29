@@ -1,7 +1,7 @@
 # todos ------------------------------------------------------------------------
 
 # - modifiers (simple tests)
-# - errors on invalid inputs (simple tests, check for name differences in formals + `...`)
+# - errors on invalid inputs (add errors from modifiers)
 
 # tests ------------------------------------------------------------------------
 
@@ -80,8 +80,27 @@ test_that("`as_typed_function()` overwriter previous argument types.", {
   expect_no_error(foo_chr("A"))
 })
 
-test_that("`as_typed_function()` errors on invalid inputs.", {
+test_that("`as_typed_function()` works with modifiers.", {
   foo <- function(x) { TRUE }
+  foo_dots <- function(...) { TRUE }
+
+  foo_maybe <- as_typed_function(foo, x = maybe(check_integer()))
+  foo_required <- as_typed_function(foo, x = required(check_integer()))
+  foo_dots_maybe <- as_typed_function(foo_dots, ... = maybe(check_integer()))
+
+  expect_true(foo_maybe(NULL))
+  expect_true(foo_maybe(10L))
+  expect_true(foo_dots_maybe(NULL, 1:5))
+
+  expect_error(foo_maybe("A"), class = "invalid_input")
+  expect_error(foo_required("A"), class = "invalid_input")
+  expect_error(foo_dots_maybe(10L, "A"), class = "invalid_input")
+
+  expect_error(foo_required(), class = "typewriter_error_typed_arg_missing")
+})
+
+test_that("`as_typed_function()` errors on invalid inputs.", {
+  foo <- function(x, ...) { TRUE }
 
   # Input must be a function
   expect_error(
@@ -93,10 +112,6 @@ test_that("`as_typed_function()` errors on invalid inputs.", {
     as_typed_function(foo, y = check_integer()),
     class = "typewriter_error_invalid_input"
   )
-  expect_error(
-    as_typed_function(foo, ... = check_integer()),
-    class = "typewriter_error_invalid_input"
-  )
   # Arguments must be named
   expect_error(
     as_typed_function(foo, check_integer()),
@@ -104,6 +119,19 @@ test_that("`as_typed_function()` errors on invalid inputs.", {
   )
   expect_error(
     as_typed_function(foo, x = check_integer(), 1L, 2L),
+    class = "typewriter_error_invalid_input"
+  )
+  # Incompatible modifiers are detected
+  expect_error(
+    as_typed_function(foo, x = optional(required(check_integer()))),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    as_typed_function(foo, ... = untyped()),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    as_typed_function(foo, ... = required(check_integer())),
     class = "typewriter_error_invalid_input"
   )
 })

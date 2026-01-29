@@ -103,6 +103,8 @@ test_that("`%<~%` works for typed function assignment.", {
 })
 
 test_that("`%<~%` works with external package checks.", {
+  skip_if_not_installed("chk")
+
   int1 %<~% chk::chk_integer()
   int2 %<~% chk::check_values(values = integer())
   int3 %<~% chk::chk_integer(1:4)
@@ -123,6 +125,8 @@ test_that("`%<~%` works with external package checks.", {
 })
 
 test_that("`%<~%` errors on invalid inputs.", {
+  skip_if_not_installed("chk")
+
   # `sym` must be a symbol
   expect_error("A" %<~% check_integer(), class = "typewriter_error_invalid_input")
   expect_error("A" %<~% check_integer_alias, class = "typewriter_error_invalid_input")
@@ -185,6 +189,38 @@ test_that("`%<~%` overwrites existing symbols in the caller's enironment.", {
 
   x <- 1L
   expect_identical(x, 1L)
+})
+
+test_that("`%<~%` can handle weird objects.", {
+  check_any <- function(x) x
+
+  x %<~% check_any(rlang::zap())
+  expect_identical(x, rlang::zap())
+
+  expect_error(
+    y %<~% check_any(rlang::missing_arg()),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    y %<~% check_any(rlang::missing_arg()),
+    class = "typewriter_error_invalid_input"
+  )
+
+  z %<~% check_any(NULL)
+  expect_null(z)
+
+  a %<~% check_any()
+
+  a <- rlang::zap()
+  expect_identical(a, rlang::zap())
+
+  a <- NULL
+  expect_null(a)
+
+  expect_error(
+    a <- rlang::missing_arg(),
+    class = "typewriter_error_invalid_assignment"
+  )
 })
 
 test_that("Typed objects within a function reference the correct function call in errors.", {

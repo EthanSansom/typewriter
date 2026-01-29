@@ -1,18 +1,3 @@
-# todos ------------------------------------------------------------------------
-
-# - errors on invalid inputs
-# - test `as_typed()` once finished
-
-# TODO: Check the use of external package checks using:
-# - rlang::rlang::arg_match
-# - rlang::check_required
-#
-# We could also add {chk} to Suggests..., might be worth it for documentation
-# sake. Look back at how {friendlynumber} used Suggested package {bignum} in
-# tests, examples, and documentation.
-
-# tests ------------------------------------------------------------------------
-
 test_that("`typed()` works.", {
   fun <- typed(function(
       x = check_integer(),
@@ -78,6 +63,8 @@ test_that("`typed()` works.", {
 })
 
 test_that("`typed()` works with package checks.", {
+  skip_if_not_installed("chk")
+
   foo <- typed(function(x = chk::chk_character()) { x })
 
   expect_identical(foo("A"), "A")
@@ -188,6 +175,70 @@ test_that("`typed()` works with `...` argument.", {
     regexp = "Invalid object x",
     fixed = TRUE
   )
+})
+
+test_that("Setting default arguments works.", {
+  check_any <- function(x) x
+
+  foo <- typed(function(
+    which_var,
+    a = NULL,
+    b = untyped(rlang::zap()),
+    c = untyped(rlang::missing_arg()),
+    d = "A",
+    e = untyped(10 + 11 / 9**2),
+
+    f = check_any(NULL),
+    g = check_any(rlang::zap()),
+    h = check_any(rlang::missing_arg()),
+    i = check_any("A"),
+    j = check_any(10 + 11 / 9**2),
+
+    k = required(check_any(NULL)),
+    l = static(check_any(rlang::zap())),
+    m = optional(check_any(rlang::missing_arg())),
+    n = maybe(check_any("A")),
+    o = assigned(check_any(10 + 11 / 9**2)),
+    p = maybe(optional(check_any(NULL)))
+  ) {
+    eval(rlang::sym(which_var))
+  })
+
+  expect_identical(
+    formals(foo),
+    as.pairlist(rlang::exprs(
+      which_var = ,
+      a = NULL,
+      b = rlang::zap(),
+      c = rlang::missing_arg(),
+      d = "A",
+      e = 10 + 11 / 9**2,
+
+      f = NULL,
+      g = rlang::zap(),
+      h = rlang::missing_arg(),
+      i = "A",
+      j = 10 + 11 / 9**2,
+
+      k = NULL,
+      l = rlang::zap(),
+      m = rlang::missing_arg(),
+      n = "A",
+      o = 10 + 11 / 9**2,
+      p = NULL
+    ))
+  )
+
+  expect_identical(foo("b"), rlang::zap())
+  expect_identical(foo("g"), rlang::zap())
+  expect_identical(foo("l"), rlang::zap())
+
+  expect_identical(foo("c"), rlang::missing_arg())
+  expect_identical(foo("h"), rlang::missing_arg())
+  expect_identical(foo("m"), rlang::missing_arg())
+
+  expect_identical(foo("k"), NULL)
+  expect_identical(foo("o"), 10 + 11 / 9**2)
 })
 
 # modifiers --------------------------------------------------------------------
@@ -349,6 +400,23 @@ test_that("`static()` modifier works.", {
   )
 })
 
+test_that("`assigned()` modifier works.", {
+  foo <- typed(function(x = assigned(check_funish())) { x })
+
+  expect_error(foo("A"), class = "invalid_input")
+  expect_true(is.function(foo(mean)))
+  expect_true(is.function(foo(~ .x + 10)))
+
+  expect_error(
+    typed(function(... = assigned(check_integer())) {}),
+    class = "typewriter_error_invalid_input"
+  )
+  expect_error(
+    typed(function(x = assigned(static(check_integer()))) {}),
+    class = "typewriter_error_invalid_input"
+  )
+})
+
 test_that("Modifier combinations work.", {
   maybe_optional <- typed(function(x = maybe(optional(check_integer()))) {
     if (rlang::is_missing(x)) rlang::missing_arg() else x
@@ -360,6 +428,12 @@ test_that("Modifier combinations work.", {
     if (rlang::is_missing(x)) rlang::missing_arg() else x
   })
   static_required <- typed(function(x = static(required(check_integer()))) {
+    x
+  })
+  assigned_optional <- typed(function(x = assigned(optional(check_integer()))) {
+    if (rlang::is_missing(x)) rlang::missing_arg() else x
+  })
+  assigned_required <- typed(function(x = assigned(required(check_integer()))) {
     x
   })
   maybe_static_optional <- typed(function(x = maybe(static(optional(check_integer())))) {
@@ -467,6 +541,9 @@ test_that("`untype_function()` works as expected.", {
 })
 
 test_that("`print.typewriter_typed_function()` works as expected.", {
+  skip_on_cran()
+  skip_if_not_installed("chk")
+
   # `env = baseenv()` stops the snaps from printing a new {testthat} environment
   # on each run (note that these functions can't actually run in `baseenv()`).
   foo <- typed(function(x = check_integer()) { x }, env = baseenv())
