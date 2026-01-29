@@ -5,3 +5,4 @@
 .DS_Store
 .quarto
 /R/-interactive-testing
+inst/doc
