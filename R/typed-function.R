@@ -1,12 +1,19 @@
-# function typing --------------------------------------------------------------
+# todos ------------------------------------------------------------------------
+
+# TODO:
+# - Write these cleaner, a few things I'd like to have:
+#   - Way more robust modifier support, ideally I could easily add any modifier
+#   - More compartimentalized code, fewer mega functions in this project
+
+# implementation ---------------------------------------------------------------
 
 #' Declare a function with typed arguments
 #'
 #' @description
 #'
 #' `typed()` modifies a function declaration (e.g. `function(x) { x + x }`) by
-#' inserting additional calls into the function body to check the types of its
-#' arguments.
+#' inserting additional calls into the function body which check the function's
+#' argument types.
 #'
 #' To declare the type of an argument in `function`, set it's default value to a
 #' type-checking call. For instance, [chk::chk_integer()] raises an error if its
@@ -15,7 +22,7 @@
 #'
 #' ```r
 #' integer_doubler <- typed(function(x = chk::chk_integer()) {
-#'  x + x
+#'   x + x
 #' })
 #' ```
 #'
@@ -27,7 +34,7 @@
 #'
 #' ```r
 #' integer_doubler_2 <- typed(function(x = chk::chk_integer(0L)) {
-#'  x + x
+#'   x + x
 #' })
 #' ```
 #'
@@ -38,11 +45,11 @@
 #'
 #' `typed()` works by inserting code into the body of a function. This is in
 #' contrast to [type_alias()] and [assign_typed()], both of which create wrappers
-#' around type-checking functions. Consider the following example:
+#' around type-checking functions. Consider this example:
 #'
 #' ```r
 #' integer_doubler <- typed(function(x = chk_integer()) {
-#'  x + x
+#'   x + x
 #' })
 #' ```
 #'
@@ -50,31 +57,34 @@
 #'
 #' ```r
 #' integer_doubler <- function(x) {
-#'  chk_integer(x)
-#'  x + x
+#'   chk_integer(x)
+#'   x + x
 #' }
 #' ```
 #'
 #' In both cases, what `integer_doubler()` does will change if the function
 #' `chk_integer()` is overwritten in the environment of `integer_doubler()`. In
-#' the worst case scenario, this breaks our contract that the argument `x` is
+#' the worst case scenario, this breaks the contract that the argument `x` is
 #' going to be an integer. To prevent such changes, type-checking calls should
 #' be namespaced:
 #'
 #' ```r
 #' integer_doubler_stable <- typed(function(x = chk::chk_integer()) {
-#'  x + x
+#'   x + x
 #' })
 #' ```
 #'
+#' Alternatively, you can explicitly define the function's parent environment
+#' using the `env` argument.
+#'
 #' @param call `[call]`
 #'
-#' A call to `function`.
+#' A call to `function` (e.g. a function declaration).
 #'
 #' @param env `[environment]`
 #'
-#' The environment of the returned function, passed to [rlang::new_function()].
-#' By default `env` is the caller's environment.
+#' The parent environment of the returned function, passed to [rlang::new_function()].
+#' By default `env` is the calling environment of `typed()`.
 #'
 #' @return
 #'
@@ -107,7 +117,7 @@
 #'
 #' # Dots can be typed as well
 #' sum2 <- typed(function(... = a_num, na.rm = chk::chk_flag(FALSE)) {
-#'   sum(..., na.rm = na.rm)
+#'   base::sum(..., na.rm = na.rm)
 #' })
 #' sum2(1, 2, 3, 4)
 #' try(sum2(1, 2, "C"))
@@ -137,13 +147,12 @@ typed <- function(call, env = rlang::caller_env()) {
   )
 }
 
-
 #' Type the arguments of an existing function
 #'
 #' @param .fun `[function]`
 #'
 #' A function whose arguments will be typed. If `.fun` is already a typed
-#' function, it's previous argument types will be overwritten.
+#' function, all of it's previous argument types will be overwritten.
 #'
 #' @param ... `[call / alias]`
 #'
@@ -154,16 +163,16 @@ typed <- function(call, env = rlang::caller_env()) {
 #'
 #' ```r
 #' my_paste0 <- as_typed_function(
-#'  .fun = base::paste0,
-#'  ... = chk::chk_character(),
-#'  collapse = maybe(chk::chk_string(NULL)),
-#'  recycle0 = chk::chk_flag(FALSE)
+#'   .fun = base::paste0,
+#'   ... = chk::chk_character(),
+#'   collapse = maybe(chk::chk_string(NULL)),
+#'   recycle0 = chk::chk_flag(FALSE)
 #' )
 #' ```
 #'
 #' `my_paste0(..., collapse, recycle0)` checks for the following types:
 #' * Each dot `..i` must be a character vector.
-#' * `collapse` is either `NULL` (via [maybe]) or a string (default is `NULL`)
+#' * `collapse` is either `NULL` (via [maybe()]) or a string (default is `NULL`)
 #' * `recycle0` is either `TRUE` or `FALSE` (default is `FALSE`).
 #'
 #' If these checks pass, then the result of `base::paste0(..., collapse, recycle0)`
@@ -194,8 +203,14 @@ as_typed_function <- function(.fun, ...) {
   if (is_typed_function(.fun)) {
     .fun <- untype_function(.fun)
   }
-
-  # TODO: `.fun` can't be a primitive or special function, must be a closure
+  if (typeof(.fun) %in% c("builtin", "special")) {
+    typewriter_abort_invalid_input(
+      sprintf(
+        '`.fun` must a function of type "closure", not of type "%s".',
+        typeof(.fun)
+      )
+    )
+  }
 
   body <- rlang::fn_body(.fun)
   args <- map(rlang::fn_fmls(.fun), \(fml) rlang::call2(quote(typewriter::untyped), fml))
@@ -273,6 +288,23 @@ new_typed_function <- function(
           error_arg, modifier_name
         ),
         x = sprintf("Typed function dots can't be %s.", modifier_name)
+      ),
+      call = error_call
+    )
+  }
+
+  stop_incompatible_modifiers <- function(modifier_1, modifier_2) {
+    typewriter_abort_invalid_input(
+      message = c(
+        sprintf("Can't convert `%s` into a <typed> function.", error_arg),
+        x = sprintf(
+          "Argument `%s` of `%s` contains calls to `%s()` and `%s()`.",
+          arg_name, error_arg, modifier_1, modifier_2
+        ),
+        x = sprintf(
+          "Typed function arguments may be either %s or %s, not both.",
+          modifier_1, modifier_2
+        )
       ),
       call = error_call
     )
@@ -380,17 +412,7 @@ new_typed_function <- function(
 
     if ("required" %in% arg_modifiers) {
       if ("optional" %in% arg_modifiers) {
-        typewriter_abort_invalid_input(
-          message = c(
-            sprintf("Can't convert `%s` into a <typed> function.", error_arg),
-            x = sprintf(
-              "Argument `%s` of `%s` contains calls to `typewriter::required()` and `typewriter::optional()`.",
-              arg_name, error_arg
-            ),
-            x = "Typed function arguments may be either optional or required, not both."
-          ),
-          call = error_call
-        )
+        stop_incompatible_modifiers("required", "optional")
       }
       if (arg_is_dots) {
         stop_incompatible_dots_modifier(modifier_name = "required")
@@ -400,11 +422,13 @@ new_typed_function <- function(
     } # Added a `required()` check, if necessary
 
     # Converts `function(arg = untyped(<expr>))`, to `function(arg = <expr>)`.
-    # We skip the `optional()` and `maybe()` modifiers for untyped arguments,
-    # since they have no effect on the typed function in this case.
     if (is_untyped_call(maybe_type_call)) {
       if (arg_is_dots) {
         stop_incompatible_dots_modifier(modifier_name = "untyped")
+      }
+      # Disallow any parent modifiers (e.g. `required(maybe(untyped(<expr>)))`)
+      if (!is_empty(arg_modifiers)) {
+        stop_incompatible_modifiers("untyped", arg_modifiers[[1]])
       }
       # Prevent calls to `untyped()` with > 1 arguments, but allow 0 arguments
       # to be used, in which case we use `rlang::missing_arg()` as the default
@@ -465,15 +489,22 @@ new_typed_function <- function(
       type_call <- call_prepend_args(maybe_type_call, !!arg_sym)
     } # Updated the call argument and created the (unmodified) type call
 
-    # Transform the call into a description before it's modified with `maybe()`
-    # or `optional()`, for a prettier description.
+    # Transform the call into a description before it's modified (prettier).
     typed_args_descs <- c(typed_args_descs, typed_arg_desc(type_call, arg_modifiers))
     typed_args_names <- c(typed_args_names, arg_name)
 
     # It's important that we order this "static" < "maybe" < "optional", so that
     # `if (!missing(arg)) if (!is.null(arg)) assign_typed(arg, call(arg))`
     # is in the correct order to prevent a missing argument error in `is.null`.
-    if ("static" %in% arg_modifiers) {
+    if ("assigned" %in% arg_modifiers) {
+      if (arg_is_dots) {
+        stop_incompatible_dots_modifier(modifier_name = "assigned")
+      }
+      if ("static" %in% arg_modifiers) {
+        stop_incompatible_modifiers("static", "assigned")
+      }
+      type_call <- assign_call(call = type_call, sym = arg_sym)
+    } else if ("static" %in% arg_modifiers) {
       if (arg_is_dots) {
         stop_incompatible_dots_modifier(modifier_name = "static")
       }
@@ -537,6 +568,10 @@ if_not_null_call <- function(call, sym) {
   rlang::call2("if", not_null, call)
 }
 
+assign_call <- function(call, sym) {
+  rlang::call2("<-", sym, call)
+}
+
 # When we use this in a typed function we'll generate a body like:
 # function(x) {
 #   rethrow_parent_assignment_error(assign_typed(x, type_call(x, ...)))
@@ -558,17 +593,93 @@ typed_assign_call <- function(call, sym) {
 
 # typed class ------------------------------------------------------------------
 
+#' Test if the object is a typed function
+#'
+#' @description
+#'
+#' This function returns `TRUE` for typed functions (class `"typewriter_typed_function"`)
+#' and returns returns `FALSE` otherwise.
+#'
+#' @param x
+#'
+#' An object to test.
+#'
+#' @return
+#'
+#' `TRUE` if `x` is a typed function, `FALSE` otherwise.
+#'
+#' @examples
+#' foo <- typed(function(x) { x })
+#' is_typed_function(foo)
+#' is_typed_function(base::mean)
+#'
 #' @export
 is_typed_function <- function(x) {
   inherits(x, "typewriter_typed_function")
 }
 
+#' Test if a function has typed arguments
+#'
+#' @description
+#'
+#' This function returns `TRUE` for typed functions (class `"typewriter_typed_function"`)
+#' which have any typed arguments and returns `FALSE` if `x` is a function with
+#' no typed arguments.
+#'
+#' @param x `[function]`
+#'
+#' A function to test.
+#'
+#' @return
+#'
+#' `TRUE` if `x` has typed arguments, `FALSE` otherwise.
+#'
+#' @examples
+#' foo <- typed(function(x) { x })
+#' bar <- typed(function(x = rlang::check_required()) { x })
+#' has_typed_args(foo)
+#' has_typed_args(bar)
+#' has_typed_args(base::mean)
 #' @export
 has_typed_args <- function(x) {
   check_is_function(x)
   is_typed_function(x) && length(attr(x, "typed_args_names")) != 0L
 }
 
+#' Unclass a typed function
+#'
+#' @description
+#'
+#' Converts a typed function (class `"typewriter_typed_function"`) into a regular
+#' function. This removes any type-checking calls added prior to the typed
+#' function's body and sets the function's class back to `function`. If `x` is
+#' an untyped function, then `x` is returned.
+#'
+#' @param x `[function]`
+#'
+#' A typed or regular function to un-type.
+#'
+#' @returns
+#'
+#' A function.
+#'
+#' @examples
+#' # Define a type-checking function
+#' assert_bool <- function(x, x_name = rlang::caller_arg(x)) {
+#'   if (!rlang::is_bool(x)) {
+#'     rlang::abort(sprintf("`%s` must be `TRUE` or `FALSE`.", x_name))
+#'   }
+#' }
+#'
+#' # `base::sum()` doesn't check the type of `na.rm`
+#' sum2 <- typed(function(..., na.rm = assert_bool(FALSE)) {
+#'   base::sum(..., na.rm = na.rm)
+#' })
+#' try(sum2(1, 2, NA, na.rm = "NO!"))
+#'
+#' # Remove type checking on `na.rm`
+#' sum2 <- untype_function(sum2)
+#' sum2(1, 2, NA, na.rm = "NO!")
 #' @export
 untype_function <- function(x) {
   check_is_function(x)
@@ -627,69 +738,30 @@ cat_typed_args <- function(x) { # nocov start
   }
 } # nocov end
 
-# modifiers --------------------------------------------------------------------
-
-#' @export
-untyped <- function(x) {
-  typewriter_stop_invalid_context() # nocov
-}
-
-#' @export
-static <- function(x) {
-  typewriter_stop_invalid_context() # nocov
-}
-
-#' @export
-required <- function(x) {
-  typewriter_stop_invalid_context() # nocov
-}
-
-#' @export
-optional <- function(x) {
-  typewriter_stop_invalid_context() # nocov
-}
-
-#' @export
-maybe <- function(x) {
-  typewriter_stop_invalid_context() # nocov
-}
-
-is_untyped_call <- function(x) {
-  rlang::is_call(x, name = "untyped", ns = c("", "typewriter"))
-}
-
-is_modified_call <- function(x) {
-  modifiers <- c("required", "optional", "maybe", "static")
-  rlang::is_call(x, name = modifiers, ns = c("", "typewriter"))
-}
-
-get_modifier_name <- function(modifier_call) { # nocov start
-  modifier <- modifier_call[[1]]
-  switch(
-    expr_type(modifier),
-    symbol = rlang::as_name(modifier),
-    namespaced = rlang::as_name(modifier[[3]]),
-    typewriter_abort(
-      sprintf("Unexpected `modifier_call = %s`.", rlang::as_label(modifier_call)),
-      internal = TRUE
-    )
-  )
-} # nocov end
-
-typewriter_stop_invalid_context <- function() {
-  typewriter_abort(
-    "Must only be used in a function typing context (e.g. when calling `%<~%` or `typewriter::typed()`).",
-    class = "typewriter_error_invalid_context",
-    call = rlang::caller_env()
-  )
-}
-
 # dependencies -----------------------------------------------------------------
 
 # These are not functions intended for external use, but are functions which are
 # injected into `typed()` functions and thus need to be made available to the
 # user.
 
+#' Re-signal an assignment error
+#'
+#' @description
+#'
+#' This function is inserted into the body of `typed()` functions which
+#' have `static()` arguments. It is not meant to be used outside of this
+#' context.
+#'
+#' @param expr `[expression]`
+#'
+#' An expression.
+#'
+#' @returns
+#'
+#' The result of evaluating `expr` or an error.
+#'
+#' @examples
+#' try(rethrow_parent_assignment_error(x %<~% stop("Parent Error")))
 #' @export
 rethrow_parent_assignment_error <- function(expr) {
   rlang::try_fetch(
@@ -700,14 +772,32 @@ rethrow_parent_assignment_error <- function(expr) {
   )
 }
 
+#' Check that a typed argument is supplied
+#'
+#' @description
+#'
+#' This function is inserted into the body of `typed()` functions which
+#' have `required()` arguments. It is not meant to be used outside of this
+#' context.
+#'
+#' @param x
+#'
+#' A function argument.
+#'
+#' @returns
+#'
+#' An error if `x` is missing and `NULL` otherwise.
+#'
+#' @examples
+#' foo <- function(x) { check_required_arg(x) }
+#' try(foo())
 #' @export
 check_required_arg <- function(x) {
-  if (!missing(x)) {
-    return(invisible(TRUE))
+  if (missing(x)) {
+    typewriter_abort(
+      message = sprintf("`%s` is absent but must be supplied.", rlang::caller_arg(x)),
+      call = rlang::caller_env(),
+      class = "typewriter_error_typed_arg_missing"
+    )
   }
-  typewriter_abort(
-    message = sprintf("`%s` is absent but must be supplied.", rlang::caller_arg(x)),
-    call = rlang::caller_env(),
-    class = "typewriter_error_typed_arg_missing"
-  )
 }

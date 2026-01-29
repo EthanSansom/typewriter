@@ -1,11 +1,103 @@
+# todos ------------------------------------------------------------------------
+
+# Documentation:
+# - type_alias()
+# - alias_caller()
+# - is_type_alias()
+
 # aliasing ---------------------------------------------------------------------
 
+#' Create a type alias function
+#'
+#' @description
+#'
+#' TODO: Description
+#'
+#' @param call `[call]`
+#'
+#' A call to a type-checking function. The first formal argument of the type-checking
+#' function should be the object checked by the function and this argument should not
+#' be supplied to `call`.
+#'
+#' For example [chk::chk_integer()] checks that it's first argument `x` is an
+#' integer. An integer type alias function can be declared like so:
+#'
+#' ```r
+#' a_integer <- type_alias(chk::chk_integer())
+#' ```
+#'
+#' This is roughly equivalent to:
+#' ```r
+#' a_integer <- function(...) {
+#'   chk::chk_integer(..1)
+#' }
+#' ```
+#'
+#' `type_alias()` supports NSE type-checking functions which use `substitute()`
+#' on their arguments. To do so, the generated type alias functions must forward
+#' their arguments via dots.
+#'
+#' Additional arguments to the type-checking function may be provided to
+#' the type-checking call. For example, the function `[chk::check_values()]`
+#' checks that it's first argument `x` is a subset of `values`. We can create a
+#' type alias for a subset of options like so:
+#'
+#' ```r
+#' opts <- c("print", "save", "log")
+#' a_valid_options <- type_alias(chk::check_values(values = opts))
+#' ```
+#'
+#' This is roughly equivalent to:
+#' ```r
+#' a_valid_options <- function(...) {
+#'   chk::check_values(..1, values = c("print", "save", "log"))
+#' }
+#' ```
+#'
+#' Additional arguments provided to the type-checking call are evaluated
+#' immediately by `type_alias()` in the calling environment.
+#'
+#' @param name `[character(1) / NULL]`
+#'
+#' What the type alias should be called (e.g. `"integer"`). This is displayed
+#' when a `type_alias()` is printed or formatted. By default, `name` is inferred
+#' from the `call` argument.
+#'
+#' @param desc `[character(1) / NULL]`
+#'
+#' A description of the type alias (e.g. `"An integer vector."`). This is
+#' displayed when a `type_alias()` is printed and used to describe `typed()`
+#' function arguments when an alias is used for argument typing. By default,
+#' the `desc` is generated using the `call` argument.
+#'
+#' @param bullets `[character / NULL]`
+#'
+#' Additional lines shown when the type alias is printed. If installed, the
+#' `bullets` are formatted using the [cli] package.
+#'
+#' @param return_call `[TRUE / FALSE]`
+#'
+#' Should the output of the type-checking `call` be returned by the type alias?
+#' This is useful for type-checking functions which coerce a checked object to
+#' the correct type.
+#'
+#' If `return_call` is `FALSE` (the default), the generated type alias function
+#' will return it's first argument.
+#'
+#' @returns
+#'
+#' A type alias function which takes one unnamed `...` argument.
+#'
+#' @examples
+#' # TODO: Examples
+#' a_integer <- type_alias(chk::chk_integer())
 #' @export
-type_alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
+type_alias <- function(call, name = NULL, desc = NULL, bullets = NULL, return_call = FALSE) {
   call <- check_is_simple_call(x = rlang::enexpr(call), x_name = "call")
   check_is_string(name, null_ok = TRUE)
   check_is_string(desc, null_ok = TRUE)
   check_is_character(bullets, null_ok = TRUE)
+  check_is_bool(return_call)
 
   error_call <- rlang::current_env()
   env <- rlang::caller_env()
@@ -73,7 +165,7 @@ type_alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
   # via `...` to support NSE check functions that use `substitute()` on their
   # arguments (e.g. via `rlang::caller_arg()`). We ensure that `...` contains
   # only one unnamed argument using `check_type_alias_dots()`. This dot is then
-  # forwarded to the first argument of the type check `call`.
+  # forwarded to the first argument of the type check `fun_call()`.
   body <- rlang::expr({
     # `sym("...")` prevents package note "... may be used in an incorrect context"
     typewriter::check_type_alias_dots(!!rlang::sym("..."))
@@ -81,6 +173,11 @@ type_alias <- function(call, name = NULL, desc = NULL, bullets = NULL) {
     !!fun_call
     ...elt(1L)
   })
+
+  # Modify the body to return `fun_call()` instead of `...elt(1L)`
+  if (return_call) {
+    body[[length(body)]] <- NULL
+  }
 
   out <- rlang::new_function(
     args = rlang::pairlist2(... = ),
@@ -131,14 +228,33 @@ print.typewriter_type_alias <- function(x, ...) {
 # correct env when the check is wrapped in an alias.
 #' @export
 alias_caller <- function() {
-  quote(parent.frame(1L))
+  quoted_parent_frame
 }
+quoted_parent_frame <- quote(parent.frame(1L))
 
 # dependencies -----------------------------------------------------------------
 
 # These are functions used within a generated `type_alias()` and are not meant
 # for external use.
 
+#' Check that one unnamed argument is supplied to dots
+#'
+#' @description
+#'
+#' This function is used internally by functions generated via `type_alias()`.
+#' It is not meant to be used outside of this context.
+#'
+#' @param ...
+#'
+#' An unnamed argument.
+#'
+#' @returns
+#'
+#' An error if too many dots, or an unnamed dot, are provided. `NULL` otherwise.
+#'
+#' @examples
+#' foo <- function(...) { check_type_alias_dots(...) }
+#' try(foo(10, 11))
 #' @export
 check_type_alias_dots <- function(...) {
   if (...length() != 1) {

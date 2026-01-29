@@ -1,4 +1,17 @@
+# todos ------------------------------------------------------------------------
+
+# Documentation:
+# - `%<~%`
+# - `assign_typed()`
+# - `stop_constant_assignment()` (dependancy)
+
+# Testing:
+# - `is_typed_object()`
+
 # assignment -------------------------------------------------------------------
+
+# TODO: I've updated the `.assign_` functions to return their `VALUE` instead
+# of `NULL`.
 
 #' @export
 `%<~%` <- function(sym, call) {
@@ -12,6 +25,12 @@
       call = call,
       env = env
     )
+  } else if (rlang::is_call(call, "const", ns = c("", "typewriter"))) {
+    .assign_const(
+      sym = sym,
+      const_call = call,
+      env = env
+    )
   } else {
     .assign_typed(
       sym = sym,
@@ -23,11 +42,79 @@
 
 #' @export
 assign_typed <- function(sym, call, env = rlang::caller_env()) {
-  .assign_typed(
-    sym = rlang::enexpr(sym),
-    call = rlang::enexpr(call),
-    env = env
+  call <- rlang::enexpr(call)
+  if (rlang::is_call(call, "const", ns = c("", "typewriter"))) {
+    .assign_const(
+      sym = rlang::enexpr(sym),
+      const_call = call,
+      env = env
+    )
+  } else {
+    .assign_typed(
+      sym = rlang::enexpr(sym),
+      call = call,
+      env = env
+    )
+  }
+}
+
+.assign_const <- function(sym, const_call, env) {
+
+  error_call <- rlang::caller_env()
+  check_is_symbol(sym, call = error_call)
+
+  args <- rlang::call_args(const_call)
+  sym_name <- rlang::as_name(sym)
+
+  if (length(args) != 1L) {
+    typewriter_abort_invalid_input(
+      message = c(
+        sprintf("Can't declare constant object `%s`.", sym_name),
+        i = sprintf("`const()` must be provided 1 argument to initialize `%s`.", sym_name),
+        x = sprintf("Provided %i arguments to `const()`.", length(args))
+      ),
+      call = error_call
+    )
+  }
+
+  value_label <- rlang::as_label(args[[1]])
+  VALUE <- check_is_evaluable(
+    args[[1]],
+    env = env,
+    message = c(
+      sprintf("Can't declare constant object `%s`.", sym_name),
+      x = sprintf("Attempted assignment `%s <- %s`.", sym_name, value_label),
+      x = sprintf("Can't evaluate `%s` in `env = %s`.", value_label, env_desc(env))
+    ),
+    call = error_call
   )
+
+  active_binding_body <- rlang::expr({
+    if (missing(object)) {
+      return(VALUE)
+    }
+    typewriter::stop_constant_assignment(
+      name = !!sym_name,
+      error_call = !!env
+    )
+  })
+  active_binding_fn_env <- new.env(parent = env)
+  active_binding_fn_env$VALUE <- VALUE
+
+  active_binding_function <- rlang::new_function(
+    args = rlang::pairlist2(object = ),
+    body = active_binding_body,
+    env = active_binding_fn_env
+  )
+  class(active_binding_function) <- c(
+    "typewriter_active_binding_function",
+    "typewriter_active_binding_constant_function",
+    "function"
+  )
+
+  rlang::env_unbind(env, sym_name)
+  makeActiveBinding(sym = sym, fun = active_binding_function, env = env)
+  invisible(VALUE)
 }
 
 .assign_typed_function <- function(sym, call, env) {
@@ -48,6 +135,7 @@ assign_typed <- function(sym, call, env = rlang::caller_env()) {
   )
 
   rlang::env_bind(env, !!sym_name := typed_fun)
+  invisible(typed_fun)
 }
 
 utils::globalVariables(":=")
@@ -165,6 +253,19 @@ utils::globalVariables(":=")
     VALUE <- args[[1]]
     args <- args[-1]
 
+    # Ideally we'd allow any assignment possible with `<-`, but initialization
+    # with a missing value introduces too much downstream messiness.
+    if (rlang::is_missing(VALUE)) {
+      sym_name <- rlang::as_name(sym)
+      typewriter_abort_invalid_input(
+        message = c(
+          sprintf("Can't declare typed object `%s`.", sym_name),
+          x = sprintf("Attempted to initialize typed object `%s` with a missing value.", sym_name)
+        ),
+        call = error_call
+      )
+    }
+
     # Ensure that the initialization value is of the correct type by attempting
     # to evaluate the provided type-checking `call` with `VALUE` as it's first
     # argument.
@@ -216,6 +317,13 @@ utils::globalVariables(":=")
       return(VALUE)
     }
 
+    # Explicitly prevent missing values (e.g. via `quote(expr = )`)
+    typewriter::check_missing_assignment(
+      expr = !!sym,
+      name = !!sym_name,
+      error_call = !!env
+    )
+
     # In-lined definition of the function called in `call`
     !!call_fun_sym <- !!call_fun
 
@@ -232,17 +340,65 @@ utils::globalVariables(":=")
     VALUE
   })
 
+  # Using instead of `rlang::new_environment()` to handle the case where `VALUE`
+  # is `rlang::zap()`.
+  active_binding_fn_env <- new.env(parent = env)
+  active_binding_fn_env$VALUE <- VALUE
+
   active_binding_function <- rlang::new_function(
     args = active_binding_args,
     body = active_binding_body,
-    env = rlang::new_environment(data = list(VALUE = VALUE), parent = env)
+    env = active_binding_fn_env
   )
+  class(active_binding_function) <- c("typewriter_active_binding_function", "function")
 
   rlang::env_unbind(env, sym_name)
   makeActiveBinding(sym = sym, fun = active_binding_function, env = env)
+  invisible(VALUE)
 }
 
 utils::globalVariables("!<-")
+
+#' Test if the object is typed
+#'
+#' @description
+#'
+#' This function returns `TRUE` if `x` is an object typed by [%<~%] or [assign_typed()]
+#' in `env` and `FALSE` otherwise. The object to test must be provided by name.
+#'
+#' @param x `[object]`
+#'
+#' An object provided by name.
+#'
+#' @param env `[environment]`
+#'
+#' The environment in which to check whether `x` is a typed object. Defaults to
+#' the calling environment of `is_typed_object()`.
+#'
+#' @return
+#'
+#' `TRUE` if `x` is a typed object, `FALSE` otherwise.
+#'
+#' @examplesIf requireNamespace("chk", quietly = TRUE)
+#' x %<~% chk::chk_integer(10L)
+#' y <- 10L
+#' identical(x, y)
+#' is_typed_object(x)
+#' is_typed_object(y)
+#'
+#' @export
+is_typed_object <- function(x, env = rlang::caller_env()) {
+  x <- check_is_symbol(rlang::enexpr(x), message = "`x` must be an object provided by name.")
+  check_is_environment(env)
+  bindingIsActive(x, env) && inherits(activeBindingFunction(x, env), "typewriter_active_binding_function")
+}
+
+# TODO: Document
+
+#' @export
+is_constant <- function(x, env = rlang::caller_env()) {
+
+}
 
 # helpers ----------------------------------------------------------------------
 
@@ -263,6 +419,50 @@ is_named_symbol <- function(x) {
 # These are not functions intended for external use, but are functions which are
 # used within the active binding function of a typed object.
 
+# TODO: Document
+
+#' @export
+stop_constant_assignment <- function(name, error_call) {
+  typewriter_abort(
+    message = sprintf("Can't assign a value to constant `%s`.", name),
+    class = "typewriter_error_invalid_assignment",
+    call = error_call
+  )
+}
+
+#' Check that an object can be evaluated
+#'
+#' @description
+#'
+#' This function is used internally by the active binding functions of objects
+#' typed using [%<~%] or [assign_typed()]. It is not meant for use outside of
+#' this context.
+#'
+#' @param expr `[expression]`
+#'
+#' An expression.
+#'
+#' @param name `[character(1)]`
+#'
+#' An object name.
+#'
+#' @param error_call `[environment]`
+#'
+#' An environment.
+#'
+#' @returns
+#'
+#' An error if `expr` signals an error and `NULL` otherwise.
+#'
+#' @examples
+#' foo <- function(x) {
+#'   check_typed_assignment(
+#'     expr = x,
+#'     name = "x",
+#'     error_call = rlang::caller_env()
+#'   )
+#' }
+#' try(foo(stop("An Error")))
 #' @export
 check_typed_assignment <- function(expr, name, error_call) {
   rlang::try_fetch(
@@ -276,4 +476,48 @@ check_typed_assignment <- function(expr, name, error_call) {
       )
     }
   )
+}
+
+#' Check that an object is not missing
+#'
+#' @description
+#'
+#' This function is used internally by the active binding functions of objects
+#' typed using [%<~%] or [assign_typed()]. It is not meant for use outside of
+#' this context.
+#'
+#' @param expr `[expression]`
+#'
+#' An expression.
+#'
+#' @param name `[character(1)]`
+#'
+#' An object name.
+#'
+#' @param error_call `[environment]`
+#'
+#' An environment.
+#'
+#' @returns
+#'
+#' An error if `expr` is missing and `NULL` otherwise.
+#'
+#' @examples
+#' foo <- function(x) {
+#'   check_missing_assignment(
+#'     expr = x,
+#'     name = "x",
+#'     error_call = rlang::caller_env()
+#'   )
+#' }
+#' try(foo())
+#' @export
+check_missing_assignment <- function(expr, name, error_call) {
+  if (rlang::is_missing(expr)) {
+    typewriter_abort(
+      message = sprintf("Attempted to assign a missing value to typed object `%s`.", name),
+      class = "typewriter_error_invalid_assignment",
+      call = error_call
+    )
+  }
 }
