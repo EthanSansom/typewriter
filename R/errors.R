@@ -40,16 +40,41 @@ check_is_string <- function(
   )
 }
 
+check_is_bool <- function(
+    x,
+    x_name = rlang::caller_arg(x),
+    call = rlang::caller_env()
+) {
+  if (rlang::is_bool(x)) {
+    return(x)
+  }
+  if (!is.logical(x)) {
+    typewriter_abort_invalid_input(
+      sprintf("`%s` must be `TRUE` or `FALSE`, not %s.", x_name, obj_type_friendly(x)),
+      call = call
+    )
+  }
+  what <- if (length(x) == 1L) "`NA`" else sprintf("length %i logical vector", length(x))
+  typewriter_abort_invalid_input(
+    c(
+      sprintf("`%s` must be `TRUE` or `FALSE`.", x_name),
+      x = sprintf("`%s` is a %s.", x_name, what)
+    ),
+    call = call
+  )
+}
+
 check_is_symbol <- function(
     x,
     x_name = rlang::caller_arg(x),
+    message = NULL,
     call = rlang::caller_env()
   ) {
   if (rlang::is_symbol(x)) {
     return(x)
   }
   typewriter_abort_invalid_input(
-    sprintf("`%s` must be a symbol, not %s.", x_name, obj_type_friendly(x)),
+    message %||% sprintf("`%s` must be a symbol, not %s.", x_name, obj_type_friendly(x)),
     call = call
   )
 }
