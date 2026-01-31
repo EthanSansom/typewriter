@@ -1,5 +1,18 @@
-is_empty <- function(x) {
-  length(x) == 0L
+unattr <- function(x) {
+  attributes(x) <- NULL
+  x
+}
+
+first <- function(x) {
+  x[[1]]
+}
+
+last <- function(x) {
+  x[[length(x)]]
+}
+
+first_is_named <- function(x) {
+  have_name(x)[[1]]
 }
 
 map2 <- function(.x, .y, .f, ...) {
@@ -12,6 +25,10 @@ map <- function(.x, .f, ...) {
 
 map_lgl <- function(.x, .f, ...) {
   vapply(X = .x, FUN = .f, FUN.VALUE = logical(1L), ...)
+}
+
+map_chr <- function(.x, .f, ...) {
+  vapply(X = .x, FUN = .f, FUN.VALUE = character(1L), ...)
 }
 
 expr_type <- function(expr) {
@@ -27,21 +44,5 @@ expr_type <- function(expr) {
     "call"
   } else {
     typeof(expr)
-  }
-}
-
-cat_bullets <- function(bullets) {
-  if (is_empty(bullets)) {
-    return(invisible())
-  } else if (rlang::is_installed("cli")) {
-    writeLines(cli::format_bullets_raw(bullets))
-  } else {
-    # {cli} interprets names in `cli_marks` as bullet marks and ignores all
-    # other names, so we do the same here to match.
-    cli_marks <- c(" ", "i", "x", "v", "!", "*", ">")
-    bullet_names <- rlang::names2(bullets)
-    cli_bullet <- bullet_names %in% cli_marks
-    bullets[cli_bullet] <- paste(bullet_names[cli_bullet], bullets[cli_bullet])
-    writeLines(bullets)
   }
 }

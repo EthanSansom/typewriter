@@ -6,12 +6,15 @@
 # ---
 # repo: r-lib/rlang
 # file: standalone-obj-type.R
-# last-updated: 2024-02-14
+# last-updated: 2025-10-02
 # license: https://unlicense.org
 # imports: rlang (>= 1.1.0)
 # ---
 #
 # ## Changelog
+#
+# 2025-10-02:
+# - `obj_type_friendly()` now shows the dimensionality of arrays.
 #
 # 2024-02-14:
 # - `obj_type_friendly()` now works for S7 objects.
@@ -67,7 +70,7 @@
 #'   article, e.g. "an integer vector".
 #' @noRd
 obj_type_friendly <- function(x, value = TRUE) {
-  if (rlang::is_missing(x)) {
+  if (is_missing(x)) {
     return("absent")
   }
 
@@ -80,15 +83,15 @@ obj_type_friendly <- function(x, value = TRUE) {
     return(sprintf("a <%s> object", type))
   }
 
-  if (!rlang::is_vector(x)) {
+  if (!is_vector(x)) {
     return(.rlang_as_friendly_type(typeof(x)))
   }
 
   n_dim <- length(dim(x))
 
   if (!n_dim) {
-    if (!rlang::is_list(x) && length(x) == 1) {
-      if (rlang::is_na(x)) {
+    if (!is_list(x) && length(x) == 1) {
+      if (is_na(x)) {
         return(switch(
           typeof(x),
           logical = "`NA`",
@@ -173,8 +176,8 @@ obj_type_friendly <- function(x, value = TRUE) {
 }
 
 vec_type_friendly <- function(x, length = FALSE) {
-  if (!rlang::is_vector(x)) {
-    rlang::abort("`x` must be a vector.")
+  if (!is_vector(x)) {
+    abort("`x` must be a vector.")
   }
   type <- typeof(x)
   n_dim <- length(dim(x))
@@ -188,14 +191,16 @@ vec_type_friendly <- function(x, length = FALSE) {
   }
 
   if (type == "list") {
-    if (n_dim < 2) {
+    if (n_dim == 0) {
       return(add_length("a list"))
-    } else if (is.data.frame(x)) {
-      return("a data frame")
     } else if (n_dim == 2) {
-      return("a list matrix")
+      if (is.data.frame(x)) {
+        return("a data frame")
+      } else {
+        return("a list matrix")
+      }
     } else {
-      return("a list array")
+      return(sprintf("a list %sD array", n_dim))
     }
   }
 
@@ -211,12 +216,12 @@ vec_type_friendly <- function(x, length = FALSE) {
     type = paste0("a ", type, " %s")
   )
 
-  if (n_dim < 2) {
+  if (n_dim == 0) {
     kind <- "vector"
   } else if (n_dim == 2) {
     kind <- "matrix"
   } else {
-    kind <- "array"
+    kind <- sprintf("%sD array", n_dim)
   }
   out <- sprintf(type, kind)
 
@@ -260,8 +265,8 @@ vec_type_friendly <- function(x, length = FALSE) {
   )
 }
 
-.rlang_stop_unexpected_typeof <- function(x, call = rlang::caller_env()) {
-  rlang::abort(
+.rlang_stop_unexpected_typeof <- function(x, call = caller_env()) {
+  abort(
     sprintf("Unexpected type <%s>.", typeof(x)),
     call = call
   )
@@ -306,11 +311,11 @@ stop_input_type <- function(
   allow_na = FALSE,
   allow_null = FALSE,
   show_value = TRUE,
-  arg = rlang::caller_arg(x),
-  call = rlang::caller_env()
+  arg = caller_arg(x),
+  call = caller_env()
 ) {
   # From standalone-cli.R
-  cli <- rlang::env_get_list(
+  cli <- env_get_list(
     nms = c("format_arg", "format_code"),
     last = topenv(),
     default = function(x) sprintf("`%s`", x),
@@ -339,7 +344,7 @@ stop_input_type <- function(
     obj_type_friendly(x, value = show_value)
   )
 
-  rlang::abort(message, ..., call = call, arg = arg)
+  abort(message, ..., call = call, arg = arg)
 }
 
 oxford_comma <- function(chr, sep = ", ", final = "or") {

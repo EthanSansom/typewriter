@@ -1,12 +1,23 @@
+# todos ------------------------------------------------------------------------
+
+# Unify names (no `_is_`) and use `stop_input_type()` where applicable.
+
 # check ------------------------------------------------------------------------
+
+check_quo_evaluable <- function(quo, msg, error_call = caller_env()) {
+  try_fetch(
+    eval_tidy(quo),
+    error = function(cnd) abort(msg, call = error_call, parent = cnd)
+  )
+}
 
 check_is_character <- function(
     x,
-    null_ok = FALSE,
+    allow_null = FALSE,
     x_name = rlang::caller_arg(x),
     call = rlang::caller_env()
 ) {
-  if ((null_ok && is.null(x)) || is.character(x)) {
+  if ((allow_null && is.null(x)) || is.character(x)) {
     return(x)
   }
   typewriter_abort_invalid_input(
@@ -15,13 +26,13 @@ check_is_character <- function(
   )
 }
 
-check_is_string <- function(
+check_string <- function(
     x,
-    null_ok = FALSE,
+    allow_null = FALSE,
     x_name = rlang::caller_arg(x),
     call = rlang::caller_env()
 ) {
-  if ((null_ok && is.null(x)) || rlang::is_string(x)) {
+  if ((allow_null && is.null(x)) || rlang::is_string(x)) {
     return(x)
   }
   if (!is.character(x)) {
@@ -79,7 +90,7 @@ check_is_symbol <- function(
   )
 }
 
-check_is_environment <- function(
+check_environment <- function(
     x,
     x_name = rlang::caller_arg(x),
     call = rlang::caller_env()
@@ -108,7 +119,7 @@ check_is_function <- function(
   )
 }
 
-check_is_simple_call <- function(
+check_is_call_simple <- function(
     x,
     x_name = rlang::caller_arg(x),
     message = NULL,
@@ -179,6 +190,7 @@ assert_dots_named <- function(..., .message = NULL, .call = rlang::caller_env())
 }
 
 # stop -------------------------------------------------------------------------
+
 
 stop_malformed_call <- function(
     x,

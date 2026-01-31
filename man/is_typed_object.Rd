@@ -20,11 +20,11 @@ the calling environment of \code{is_typed_object()}.}
 \code{TRUE} if \code{x} is a typed object, \code{FALSE} otherwise.
 }
 \description{
-This function returns \code{TRUE} if \code{x} is an object typed by \link{\%<~\%} or \code{\link[=assign_typed]{assign_typed()}}
+This function returns \code{TRUE} if \code{x} is an object typed by \code{\link{\%<~\%}} or \code{\link[=assign_typed]{assign_typed()}}
 in \code{env} and \code{FALSE} otherwise. The object to test must be provided by name.
 }
 \examples{
-\dontshow{if (requireNamespace("chk", quietly = TRUE)) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (requireNamespace("chk", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 x \%<~\% chk::chk_integer(10L)
 y <- 10L
 identical(x, y)

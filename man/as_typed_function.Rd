@@ -44,7 +44,7 @@ A typed function.
 Type the arguments of an existing function
 }
 \examples{
-\dontshow{if (requireNamespace("chk", quietly = TRUE)) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (requireNamespace("chk", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 my_paste0 <- as_typed_function(
  .fun = base::paste0,
  ... = chk::chk_character(),

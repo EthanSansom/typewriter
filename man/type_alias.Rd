@@ -2,90 +2,26 @@
 % Please edit documentation in R/alias.R
 \name{type_alias}
 \alias{type_alias}
-\title{Create a type alias function}
+\title{Create a type alias}
 \usage{
-type_alias(call, name = NULL, desc = NULL, bullets = NULL, return_call = FALSE)
+type_alias(call, name = NULL, env = caller_env(), returns = c("arg", "result"))
 }
 \arguments{
-\item{call}{\verb{[call]}
+\item{call}{A call}
 
-A call to a type-checking function. The first formal argument of the type-checking
-function should be the object checked by the function and this argument should not
-be supplied to \code{call}.
+\item{name}{A string}
 
-For example \code{\link[chk:chk_integer]{chk::chk_integer()}} checks that it's first argument \code{x} is an
-integer. An integer type alias function can be declared like so:
+\item{env}{An environment}
 
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{a_integer <- type_alias(chk::chk_integer())
-}\if{html}{\out{</div>}}
-
-This is roughly equivalent to:
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{a_integer <- function(...) \{
-  chk::chk_integer(..1)
-\}
-}\if{html}{\out{</div>}}
-
-\code{type_alias()} supports NSE type-checking functions which use \code{substitute()}
-on their arguments. To do so, the generated type alias functions must forward
-their arguments via dots.
-
-Additional arguments to the type-checking function may be provided to
-the type-checking call. For example, the function \verb{[chk::check_values()]}
-checks that it's first argument \code{x} is a subset of \code{values}. We can create a
-type alias for a subset of options like so:
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{opts <- c("print", "save", "log")
-a_valid_options <- type_alias(chk::check_values(values = opts))
-}\if{html}{\out{</div>}}
-
-This is roughly equivalent to:
-
-\if{html}{\out{<div class="sourceCode r">}}\preformatted{a_valid_options <- function(...) \{
-  chk::check_values(..1, values = c("print", "save", "log"))
-\}
-}\if{html}{\out{</div>}}
-
-Additional arguments provided to the type-checking call are evaluated
-immediately by \code{type_alias()}.}
-
-\item{name}{\verb{[character(1) / NULL]}
-
-What the type alias should be called (e.g. \code{"integer"}). This is displayed
-when a \code{type_alias()} is printed or formatted. By default, \code{name} is inferred
-from the \code{call} argument.}
-
-\item{desc}{\verb{[character(1) / NULL]}
-
-A description of the type alias (e.g. \code{"An integer vector."}). This is
-displayed when a \code{type_alias()} is printed and used to describe \code{typed()}
-function arguments when an alias is used for argument typing. By default,
-the \code{desc} is generated using the \code{call} argument.}
-
-\item{bullets}{\verb{[character / NULL]}
-
-Additional lines shown when the type alias is printed. If installed, the
-\code{bullets} are formatted using the \link{cli} package.}
-
-\item{return_call}{\verb{[TRUE / FALSE]}
-
-Should the output of the type-checking \code{call} be returned by the type alias?
-This is useful for type-checking functions which coerce a checked object to
-the correct type.
-
-If \code{return_call} is \code{FALSE} (the default), the generated type alias function
-will return it's first argument.}
+\item{returns}{A result}
 }
 \value{
-A type alias function which takes one unnamed \code{...} argument.
+An alias
 }
 \description{
-TODO: Description
-}
-\details{
-TODO: Talk about how this is basically partial function application and
-how \code{...} is used in the generated function.
+Create a type alias
 }
 \examples{
-a_integer <- type_alias(chk::chk_integer())
+type_alias(foo)
+
 }

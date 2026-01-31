@@ -24,7 +24,7 @@ An error if \code{expr} signals an error and \code{NULL} otherwise.
 }
 \description{
 This function is used internally by the active binding functions of objects
-typed using \link{\%<~\%} or \code{\link[=assign_typed]{assign_typed()}}. It is not meant for use outside of
+typed using \code{\link{\%<~\%}} or \code{\link[=assign_typed]{assign_typed()}}. It is not meant for use outside of
 this context.
 }
 \examples{

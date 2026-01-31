@@ -3,7 +3,7 @@
 # Documentation:
 # - `%<~%`
 # - `assign_typed()`
-# - `stop_constant_assignment()` (dependancy)
+# - `stop_constant_assignment()` (dependency)
 
 # Testing:
 # - `is_typed_object()`
@@ -13,6 +13,15 @@
 # TODO: I've updated the `.assign_` functions to return their `VALUE` instead
 # of `NULL`.
 
+
+#' Typed Assignment
+#'
+#' This is a typed assignment operator.
+#'
+#' @param sym A symbol.
+#'
+#' @param call A call.
+#'
 #' @export
 `%<~%` <- function(sym, call) {
   call <- rlang::enexpr(call)
@@ -40,6 +49,14 @@
   }
 }
 
+#' Typed Assignment (inline)
+#'
+#' @param sym A symbol
+#'
+#' @param call A call
+#'
+#' @param env An environment
+#'
 #' @export
 assign_typed <- function(sym, call, env = rlang::caller_env()) {
   call <- rlang::enexpr(call)
@@ -180,7 +197,7 @@ utils::globalVariables(":=")
       call = error_call
     )
   } else {
-    check_is_simple_call(
+    check_is_call_simple(
       x = call,
       message = c(
         "`call` must be an <alias> or a simple call.",
@@ -345,7 +362,7 @@ utils::globalVariables(":=")
   active_binding_fn_env <- new.env(parent = env)
   active_binding_fn_env$VALUE <- VALUE
 
-  active_binding_function <- rlang::new_function(
+  active_binding_function <- new_function(
     args = active_binding_args,
     body = active_binding_body,
     env = active_binding_fn_env
@@ -363,7 +380,7 @@ utils::globalVariables("!<-")
 #'
 #' @description
 #'
-#' This function returns `TRUE` if `x` is an object typed by [%<~%] or [assign_typed()]
+#' This function returns `TRUE` if `x` is an object typed by \code{\link{\%<~\%}} or [assign_typed()]
 #' in `env` and `FALSE` otherwise. The object to test must be provided by name.
 #'
 #' @param x `[object]`
@@ -389,7 +406,7 @@ utils::globalVariables("!<-")
 #' @export
 is_typed_object <- function(x, env = rlang::caller_env()) {
   x <- check_is_symbol(rlang::enexpr(x), message = "`x` must be an object provided by name.")
-  check_is_environment(env)
+  check_environment(env)
   bindingIsActive(x, env) && inherits(activeBindingFunction(x, env), "typewriter_active_binding_function")
 }
 
@@ -435,7 +452,7 @@ stop_constant_assignment <- function(name, error_call) {
 #' @description
 #'
 #' This function is used internally by the active binding functions of objects
-#' typed using [%<~%] or [assign_typed()]. It is not meant for use outside of
+#' typed using \code{\link{\%<~\%}} or [assign_typed()]. It is not meant for use outside of
 #' this context.
 #'
 #' @param expr `[expression]`
@@ -483,7 +500,7 @@ check_typed_assignment <- function(expr, name, error_call) {
 #' @description
 #'
 #' This function is used internally by the active binding functions of objects
-#' typed using [%<~%] or [assign_typed()]. It is not meant for use outside of
+#' typed using \code{\link{\%<~\%}} or [assign_typed()]. It is not meant for use outside of
 #' this context.
 #'
 #' @param expr `[expression]`

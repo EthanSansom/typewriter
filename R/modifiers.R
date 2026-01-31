@@ -16,7 +16,7 @@ const <- function(x) {
 #' @description
 #'
 #' Indicates that a typed function argument should be considered untyped.
-#' This function may only be used when declaring a function with [`%<~%`]
+#' This function may only be used when declaring a function with \code{\link{\%<~\%}}
 #' or [typed()]. This is useful for preventing the default value of an
 #' argument from being considered a type-checking call.
 #'
@@ -26,7 +26,7 @@ const <- function(x) {
 #'
 #' @returns
 #'
-#' If used outside of a function typing context (e.g. [`%<~%`] or [typed()])
+#' If used outside of a function typing context (e.g. \code{\link{\%<~\%}} or [typed()])
 #' this function raises an error. In a function typing context, returns an
 #' expression marked as being an untyped argument.
 #'
@@ -58,7 +58,7 @@ untyped <- function(x) {
 #' type is never inadvertently changed within the body of a function (e.g.
 #' an argument is coerced from an integer to a double).
 #'
-#' This function may only be used when declaring a function with [`%<~%`]
+#' This function may only be used when declaring a function with \code{\link{\%<~\%}}
 #' or [typed()].
 #'
 #' @details
@@ -90,7 +90,7 @@ untyped <- function(x) {
 #'
 #' @returns
 #'
-#' If used outside of a function typing context (e.g. [`%<~%`] or [typed()])
+#' If used outside of a function typing context (e.g. \code{\link{\%<~\%}} or [typed()])
 #' this function raises an error. In a function typing context, returns an
 #' expression marked as being a persistently typed argument.
 #'
@@ -135,7 +135,7 @@ static <- function(x) {
 #' an additional check which raises an informative error if an argument
 #' with no default value is not supplied when the function is called.
 #'
-#' This function may only be used when declaring a function with [`%<~%`]
+#' This function may only be used when declaring a function with \code{\link{\%<~\%}}
 #' or [typed()].
 #'
 #' @details
@@ -165,7 +165,7 @@ static <- function(x) {
 #'
 #' @returns
 #'
-#' If used outside of a function typing context (e.g. [`%<~%`] or [typed()])
+#' If used outside of a function typing context (e.g. \code{\link{\%<~\%}} or [typed()])
 #' this function raises an error. In a function typing context, returns an
 #' expression marked as being a required argument.
 #'
@@ -204,7 +204,7 @@ required <- function(x) {
 #' is only type-checked if it is supplied. If an optional argument is missing,
 #' then the type check is skipped.
 #'
-#' This function may only be used when declaring a function with [`%<~%`]
+#' This function may only be used when declaring a function with \code{\link{\%<~\%}}
 #' or [typed()].
 #'
 #' @param x `[call]`
@@ -215,7 +215,7 @@ required <- function(x) {
 #'
 #' @returns
 #'
-#' If used outside of a function typing context (e.g. [`%<~%`] or [typed()])
+#' If used outside of a function typing context (e.g. \code{\link{\%<~\%}} or [typed()])
 #' this function raises an error. In a function typing context, returns an
 #' expression marked as being an optional argument.
 #'
@@ -264,7 +264,7 @@ optional <- function(x) {
 #' This is useful to accommodate the common pattern of using a `NULL`
 #' argument value to indicate that the argument is missing.
 #'
-#' This function may only be used when declaring a function with [`%<~%`]
+#' This function may only be used when declaring a function with \code{\link{\%<~\%}}
 #' or [typed()].
 #'
 #' @param x `[call]`
@@ -275,7 +275,7 @@ optional <- function(x) {
 #'
 #' @returns
 #'
-#' If used outside of a function typing context (e.g. [`%<~%`] or [typed()])
+#' If used outside of a function typing context (e.g. \code{\link{\%<~\%}} or [typed()])
 #' this function raises an error. In a function typing context, returns an
 #' expression marked as being a potentially `NULL` argument.
 #'
@@ -317,7 +317,7 @@ maybe <- function(x) {
 #' by it's type-checking function. This is useful for when a type-checking
 #' function coerces it's input to the correct type.
 #'
-#' This function may only be used when declaring a function with [`%<~%`]
+#' This function may only be used when declaring a function with \code{\link{\%<~\%}}
 #' or [typed()].
 #'
 #' @param x `[call]`
@@ -328,7 +328,7 @@ maybe <- function(x) {
 #'
 #' @returns
 #'
-#' If used outside of a function typing context (e.g. [`%<~%`] or [typed()])
+#' If used outside of a function typing context (e.g. \code{\link{\%<~\%}} or [typed()])
 #' this function raises an error. In a function typing context, returns an
 #' expression marked as being an argument to re-assign during type-checking.
 #'

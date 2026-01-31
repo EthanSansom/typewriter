@@ -81,7 +81,7 @@ Alternatively, you can explicitly define the function's parent environment
 using the \code{env} argument.
 }
 \examples{
-\dontshow{if (requireNamespace("chk", quietly = TRUE)) (if (getRversion() >= "3.4") withAutoprint else force)(\{ # examplesIf}
+\dontshow{if (requireNamespace("chk", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 # Declare the types of arguments
 add <- typed(function(x = chk::chk_numeric(), y = chk::chk_numeric()) {
   x + y

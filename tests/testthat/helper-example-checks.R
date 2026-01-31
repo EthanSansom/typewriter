@@ -33,7 +33,3 @@ check_funish <- function(x) {
     call = rlang::caller_env()
   )
 }
-
-# aliases ----------------------------------------------------------------------
-
-check_integer_alias <- type_alias(check_integer())

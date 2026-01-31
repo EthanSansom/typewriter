@@ -10,7 +10,7 @@ check_type_alias_dots(...)
 \item{...}{An unnamed argument.}
 }
 \value{
-An error if too many dots or an unnamed dot is provided and \code{NULL} otherwise.
+An error if too many dots, or an unnamed dot, are provided. \code{NULL} otherwise.
 }
 \description{
 This function is used internally by functions generated via \code{type_alias()}.

@@ -124,7 +124,7 @@
 #' try(sum2(1, 2, 3, na.rm = "no"))
 #' @export
 typed <- function(call, env = rlang::caller_env()) {
-  check_is_environment(env)
+  check_environment(env)
   call <- rlang::enexpr(call)
   if (!rlang::is_call(call, "function", ns = "")) {
     if (rlang::is_call(call)) {
@@ -550,13 +550,13 @@ new_typed_function <- function(
   )
 }
 
-call_prepend_args <- function(call, ...) {
-  if (!is.call(call)) {
-    typewriter_abort(sprintf("Expected `call` to be a call, not %s", typeof(call)), internal = TRUE) # nocov
-  }
-  call_args <- as.list(call[-1])
-  rlang::call_modify(call[1], !!!rlang::enexprs(...), !!!call_args)
-}
+# call_prepend_args <- function(call, ...) {
+#   if (!is.call(call)) {
+#     typewriter_abort(sprintf("Expected `call` to be a call, not %s", typeof(call)), internal = TRUE) # nocov
+#   }
+#   call_args <- as.list(call[-1])
+#   rlang::call_modify(call[1], !!!rlang::enexprs(...), !!!call_args)
+# }
 
 if_not_missing_call <- function(call, sym) {
   not_missing <- rlang::expr(!missing(!!sym) && !identical(!!sym, quote(expr = )))
